@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ג'ינג'ר תיירות — מסוף הסוכן</title>
+<script src="https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Heebo:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root{
+  --navy:#1F3A52;
+  --navy-deep:#13242F;
+  --parchment:#EEF1ED;
+  --paper:#FBFBF9;
+  --gold:#B8893F;
+  --gold-deep:#8E6A2E;
+  --coral:#B6493D;
+  --green:#3E7C5A;
+  --ink:#22303C;
+  --ink-soft:#5C6B73;
+  --line:#D7DCD4;
+  --shadow: 0 2px 10px rgba(19,36,47,0.08);
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--parchment);
+  color:var(--ink);
+  font-family:'Heebo', sans-serif;
+  direction:rtl;
+}
+.ltr{direction:ltr; text-align:left; font-family:'Heebo', sans-serif;}
+.mono{font-family:'JetBrains Mono', monospace;}
+
+header{
+  background:linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 100%);
+  color:#F4F1E6;
+  padding:28px 32px 22px;
+  position:relative;
+  overflow:hidden;
+}
+header::after{
+  content:"";
+  position:absolute; inset:0;
+  background-image: radial-gradient(circle at 90% 20%, rgba(184,137,63,0.18), transparent 45%);
+  pointer-events:none;
+}
+header h1{
+  font-family:'Frank Ruhl Libre', serif;
+  font-weight:900;
+  font-size:30px;
+  margin:0 0 4px;
+  letter-spacing:0.3px;
+}
+header p{
+  margin:0;
+  color:#C9D2D6;
+  font-size:14px;
+  letter-spacing:0.4px;
+}
+.brand-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  position:relative;
+  z-index:1;
+  flex-wrap:wrap;
+}
+.export-btn{
+  background:transparent;
+  color:#F4F1E6;
+  border:1.5px solid var(--gold);
+  white-space:nowrap;
+}
+.export-btn:hover{
+  background:var(--gold);
+  color:var(--navy-deep);
+}
+.tag{
+  position:absolute; right:32px; top:10px;
+  border:1px solid var(--gold);
+  color:var(--gold);
+  font-family:'JetBrains Mono', monospace;
+  font-size:11px;
+  padding:5px 10px;
+  border-radius:3px;
+  letter-spacing:1px;
+  transform:rotate(-3deg);
+}
+
+nav.tabs{
+  display:flex;
+  background:var(--navy-deep);
+  padding:0 24px;
+  gap:4px;
+  overflow-x:auto;
+}
+nav.tabs button{
+  background:transparent;
+  border:none;
+  color:#9FB0B8;
+  font-family:'Heebo', sans-serif;
+  font-size:14px;
+  font-weight:500;
+  padding:13px 18px 11px;
+  cursor:pointer;
+  border-bottom:3px solid transparent;
+  white-space:nowrap;
+  transition:all .15s ease;
+}
+nav.tabs button .num{
+  font-family:'JetBrains Mono', monospace;
+  font-size:11px;
+  opacity:.7;
+  margin-left:6px;
+}
+nav.tabs button:hover{color:#F4F1E6;}
+nav.tabs button.active{
+  color:var(--gold);
+  border-bottom-color:var(--gold);
+}
+
+main{
+  max-width:1180px;
+  margin:0 auto;
+  padding:26px 24px 80px;
+}
+
+.card{
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:6px;
+  box-shadow:var(--shadow);
+  padding:20px;
+  margin-bottom:18px;
+}
+.card h2{
+  font-family:'Frank Ruhl Libre', serif;
+  font-size:19px;
+  margin:0 0 14px;
+  color:var(--navy);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.section-head{
+  display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;
+}
+.section-head h2{margin:0;}
+
+.btn{
+  background:var(--navy);
+  color:#fff;
+  border:none;
+  padding:9px 16px;
+  border-radius:4px;
+  font-family:'Heebo', sans-serif;
+  font-size:13.5px;
+  font-weight:500;
+  cursor:pointer;
+  transition:background .15s ease;
+}
+.btn:hover{background:var(--navy-deep);}
+.btn.gold{background:var(--gold);}
+.btn.gold:hover{background:var(--gold-deep);}
+.btn.coral{background:var(--coral);}
+.btn.coral:hover{background:#923a31;}
+.btn.ghost{
+  background:transparent;
+  color:var(--navy);
+  border:1px solid var(--line);
+}
+.btn.ghost:hover{border-color:var(--navy);}
+.btn.small{padding:5px 10px; font-size:12px;}
+.btn:disabled{opacity:.4; cursor:not-allowed;}
+
+table{width:100%; border-collapse:collapse; font-size:13.5px;}
+th{
+  text-align:right;
+  font-size:11.5px;
+  letter-spacing:.4px;
+  color:var(--ink-soft);
+  text-transform:uppercase;
+  border-bottom:2px solid var(--line);
+  padding:8px 8px;
+  font-weight:600;
+}
+td{padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle;}
+tr:hover td{background:rgba(184,137,63,0.05);}
+.empty{
+  text-align:center;
+  padding:40px 20px;
+  color:var(--ink-soft);
+}
+.empty .stamp{
+  display:inline-block;
+  border:2px dashed var(--line);
+  border-radius:8px;
+  padding:18px 26px;
+  font-family:'Frank Ruhl Libre', serif;
+  color:var(--ink-soft);
+}
+
+.pill{
+  display:inline-block;
+  padding:2px 9px;
+  border-radius:20px;
+  font-size:11.5px;
+  font-weight:600;
+  font-family:'JetBrains Mono', monospace;
+}
+.pill.ok{background:rgba(62,124,90,.13); color:var(--green);}
+.pill.warn{background:rgba(182,73,61,.13); color:var(--coral);}
+.pill.neutral{background:rgba(31,58,82,.08); color:var(--navy);}
+.pill.gold{background:rgba(184,137,63,.15); color:var(--gold-deep);}
+.pill.muted{background:rgba(92,107,115,.14); color:var(--ink-soft);}
+
+.icon-btn{
+  background:none; border:none; cursor:pointer; font-size:14px;
+  padding:3px 6px; border-radius:4px; color:var(--ink-soft);
+}
+.icon-btn:hover{background:var(--parchment); color:var(--navy);}
+.icon-btn.del:hover{color:var(--coral);}
+
+/* form */
+.field-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 16px;}
+.field{display:flex; flex-direction:column; gap:5px;}
+.field.full{grid-column:1/-1;}
+.field label{font-size:12px; color:var(--ink-soft); font-weight:500;}
+.field input, .field select{
+  border:1px solid var(--line);
+  border-radius:4px;
+  padding:8px 10px;
+  font-family:'Heebo', sans-serif;
+  font-size:14px;
+  background:#fff;
+  color:var(--ink);
+}
+.field textarea{
+  border:1px solid var(--line);
+  border-radius:4px;
+  padding:8px 10px;
+  font-family:'Heebo', sans-serif;
+  font-size:14px;
+  background:#fff;
+  color:var(--ink);
+  resize:vertical;
+  min-height:64px;
+}
+.field textarea:focus{outline:2px solid var(--gold); outline-offset:0; border-color:var(--gold);}
+.field input:focus, .field select:focus{outline:2px solid var(--gold); outline-offset:0; border-color:var(--gold);}
+.field input.ltr{font-family:'Heebo',sans-serif;}
+
+/* modal */
+.overlay{
+  position:fixed; inset:0; background:rgba(19,36,47,.55);
+  display:flex; align-items:center; justify-content:center; z-index:50;
+  padding:20px;
+}
+.modal{
+  background:#fff; border-radius:8px; max-width:560px; width:100%;
+  max-height:88vh; overflow-y:auto;
+  box-shadow:0 20px 50px rgba(0,0,0,.3);
+}
+.modal-head{
+  padding:18px 22px; border-bottom:1px solid var(--line);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.modal-head h3{margin:0; font-family:'Frank Ruhl Libre', serif; font-size:18px; color:var(--navy);}
+.modal-body{padding:20px 22px;}
+.modal-foot{padding:16px 22px; border-top:1px solid var(--line); display:flex; gap:10px; justify-content:flex-start;}
+.close-x{background:none; border:none; font-size:20px; cursor:pointer; color:var(--ink-soft); line-height:1;}
+
+/* summary strip */
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:18px;}
+.stat{
+  background:var(--navy); color:#F4F1E6; border-radius:6px; padding:14px 16px;
+  position:relative; overflow:hidden;
+}
+.stat .label{font-size:11px; color:#9FB0B8; letter-spacing:.5px; text-transform:uppercase;}
+.stat .value{font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:600; margin-top:4px;}
+.stat.gold{background:var(--gold);}
+.stat.gold .label{color:#3a2c12;}
+.stat.gold .value{color:#2b2009;}
+
+.progress-wrap{background:var(--line); border-radius:20px; height:10px; overflow:hidden; margin-top:8px;}
+.progress-bar{height:100%; background:var(--green); transition:width .3s ease;}
+
+.group-card{
+  border:1px solid var(--line); border-radius:6px; padding:14px 16px; margin-bottom:10px;
+  background:#fff; cursor:pointer; transition:border-color .15s ease;
+}
+.group-card:hover{border-color:var(--gold);}
+.group-card.open{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset;}
+.group-card .title-row{display:flex; justify-content:space-between; align-items:flex-start;}
+.group-card h3{margin:0; font-family:'Frank Ruhl Libre', serif; font-size:16.5px; color:var(--navy);}
+.group-card .meta{font-size:12.5px; color:var(--ink-soft); margin-top:3px;}
+.group-card .meta span{margin-left:12px;}
+
+.member-list{margin-top:14px; border-top:1px dashed var(--line); padding-top:14px;}
+.member-row{display:flex; align-items:center; gap:8px; padding:5px 2px; font-size:13.5px;}
+.member-row input{accent-color:var(--gold);}
+
+select.group-select, select.room-type-select{
+  border:1px solid var(--line); border-radius:4px; padding:8px 10px; font-family:'Heebo',sans-serif; font-size:14px; background:#fff;
+}
+
+.room-block{border:1px solid var(--line); border-radius:6px; padding:14px 16px; margin-bottom:12px; background:#fff;}
+.room-block .head{display:flex; justify-content:space-between; align-items:center;}
+.room-block .head b{font-family:'Frank Ruhl Libre', serif; color:var(--navy); font-size:15px;}
+.room-block .guests{margin-top:8px; font-size:13px; color:var(--ink-soft);}
+.checkbox-grid{display:grid; grid-template-columns:1fr 1fr; gap:4px 14px; max-height:220px; overflow-y:auto; padding:4px 0;}
+.checkbox-grid label{display:flex; align-items:center; gap:7px; font-size:13.5px; padding:3px 0;}
+.checkbox-grid input{accent-color:var(--gold);}
+
+.amount-input{width:110px; text-align:left;}
+.search-box{
+  border:1px solid var(--line); border-radius:4px; padding:8px 12px; font-family:'Heebo',sans-serif;
+  font-size:13.5px; width:220px;
+}
+footer.note{font-size:12px; color:var(--ink-soft); text-align:center; margin-top:30px;}
+
+/* ================= RESPONSIVE / MOBILE ================= */
+@media (max-width: 768px){
+  header{padding:18px 14px 14px;}
+  header h1{font-size:21px;}
+  header p{font-size:12px;}
+  .tag{position:static; display:inline-block; transform:none; margin-bottom:10px; font-size:10px;}
+  .brand-row{flex-direction:column; align-items:stretch; gap:10px;}
+  .brand-row .export-btn{width:100%; text-align:center; padding:10px 16px;}
+
+  nav.tabs{padding:0 8px;}
+  nav.tabs button{padding:11px 12px 9px; font-size:12.5px;}
+  nav.tabs button .num{margin-left:4px;}
+
+  main{padding:14px 10px 60px;}
+
+  .card{padding:14px 12px;}
+  .card h2{font-size:16px;}
+  .section-head{flex-direction:column; align-items:stretch; gap:10px;}
+  .section-head > div{flex-direction:column !important; width:100%;}
+  .search-box{width:100%;}
+  .section-head select,
+  .group-select,
+  .room-type-select{width:100%;}
+
+  .field-grid{grid-template-columns:1fr;}
+  .checkbox-grid{grid-template-columns:1fr; max-height:180px;}
+
+  .stats{grid-template-columns:repeat(2,1fr); gap:8px;}
+  .stat{padding:11px 12px;}
+  .stat .value{font-size:18px;}
+
+  .overlay{padding:0;}
+  .modal{max-width:100%; width:100%; max-height:100vh; height:100%; border-radius:0;}
+  .modal-body{padding:16px;}
+  .modal-foot{flex-wrap:wrap; padding:14px 16px;}
+  .modal-foot .btn{flex:1 1 auto;}
+
+  /* טבלאות רחבות גוללות אופקית בתוך הכרטיס שלהן במקום להישבר/להצטופף */
+  .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  table{min-width:640px;}
+
+  .amount-input{width:85px;}
+}
+
+@media (max-width: 420px){
+  header h1{font-size:18px;}
+  .stats{grid-template-columns:1fr 1fr;}
+  nav.tabs button{font-size:11.5px; padding:10px 9px 8px;}
+}
+</style>
+</head>
+<body>
+
+<div id="login-screen" style="position:fixed; inset:0; z-index:5000; background:var(--navy-deep); display:flex; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--paper); border-radius:8px; padding:32px 28px; max-width:360px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.35); text-align:center;">
+    <h1 style="font-family:'Frank Ruhl Libre', serif; font-size:22px; color:var(--navy); margin:0 0 6px;">ג'ינג'ר תיירות</h1>
+    <p style="font-size:13px; color:var(--ink-soft); margin:0 0 20px;">הזינו את סיסמת הצוות כדי להיכנס למערכת</p>
+    <input type="password" id="login-password" placeholder="סיסמה" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:4px; font-size:14px; margin-bottom:10px; font-family:'Heebo', sans-serif; text-align:center;" onkeydown="if(event.key==='Enter') doLogin();">
+    <button class="btn gold" style="width:100%; padding:11px;" onclick="doLogin()">כניסה</button>
+    <p id="login-error" style="color:var(--coral); font-size:12.5px; margin:12px 0 0; min-height:16px; white-space:pre-wrap;"></p>
+    <p style="font-size:11px; color:var(--ink-soft); margin:16px 0 0; line-height:1.5; border-top:1px solid var(--line); padding-top:10px;">
+      אם הכניסה לא מגיבה: ודאו שאתם פותחים את המערכת מקישור אינטרנט (https://...) ולא מקובץ ששמור ישירות על המכשיר — התחברות לא עובדת אמין מקובץ מקומי בטלפון.
+    </p>
+  </div>
+</div>
+
+<header>
+  <span class="tag">GINGER TOURS</span>
+  <div class="brand-row">
+    <div>
+      <h1>ג'ינג'ר תיירות</h1>
+      <p>מסוף הסוכן · ניהול לקוחות, חדרים, תשלומים וקבוצות נסיעה</p>
+    </div>
+    <button class="btn export-btn" onclick="exportToExcel()">⭳ ייצוא הכל לאקסל</button>
+    <button class="btn ghost" style="border-color:#F4F1E6; color:#F4F1E6;" onclick="if(firebaseReady) firebase.auth().signOut();">🔒 התנתקות</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="customers">לקוחות <span class="num" id="cnt-customers"></span></button>
+  <button data-tab="rooms">חדרים <span class="num" id="cnt-rooms"></span></button>
+  <button data-tab="payments">תשלומים <span class="num" id="cnt-payments"></span></button>
+  <button data-tab="groups">קבוצות <span class="num" id="cnt-groups"></span></button>
+</nav>
+
+<main id="content"></main>
+
+<footer class="note">הנתונים נשמרים בפיירבייס (Firestore) של פרויקט הפיירבייס שהגדרתם, וזמינים מכל מכשיר שמריץ את הקובץ עם אותם פרטי חיבור.</footer>
+
+<div id="debug-panel" onclick="this.style.display='none';" style="display:none; position:fixed; inset:0; z-index:9999; background:#2b0000; color:#ffdddd; font-family:monospace; font-size:13px; padding:16px; padding-top:50px; overflow:auto; direction:ltr; text-align:left; white-space:pre-wrap;">
+  <div style="position:fixed; top:0; right:0; left:0; background:#4a0000; padding:10px 16px; font-weight:bold;">⚠ שגיאה נתפסה — הקישו כדי לסגור ולנסות שוב</div>
+  <div id="debug-panel-content"></div>
+</div>
+<script>
+/* ---------------- מנגנון תפיסת שגיאות (debug) ----------------
+   מציג שגיאות JS ישירות על המסך, כי בפלאפון אין גישה נוחה לקונסולת מפתחים.
+   אם המסך נראה "תקוע" — פתחו שוב את הקובץ ובדקו אם נפתחת כאן מסגרת אדומה עם טקסט שגיאה. */
+function showDebugError(msg){
+  const panel = document.getElementById('debug-panel');
+  const content = document.getElementById('debug-panel-content');
+  if(!panel || !content) return;
+  panel.style.display = 'block';
+  content.textContent += (content.textContent ? '\n\n---\n\n' : '') + msg;
+}
+window.addEventListener('error', function(e){
+  showDebugError('JS ERROR:\n' + (e.message||'') + '\nFile: ' + (e.filename||'') + ' Line: ' + (e.lineno||'') + ':' + (e.colno||'') + '\n' + (e.error && e.error.stack ? e.error.stack : ''));
+});
+window.addEventListener('unhandledrejection', function(e){
+  showDebugError('UNHANDLED PROMISE REJECTION:\n' + (e.reason && e.reason.message ? e.reason.message : String(e.reason)) + '\n' + (e.reason && e.reason.stack ? e.reason.stack : ''));
+});
+</script>
+<script>
+/* ---------------- Firebase setup ---------------- */
+/* החליפו את הערכים למטה בפרטי פרויקט הפיירבייס שלכם.
+   מקבלים אותם ב-Firebase Console > Project settings > General > Your apps > SDK setup and configuration */
+const firebaseConfig = {
+  apiKey: "AIzaSyCEwLnz19v3zH2jNN_pC1enEwXKQtXQmac",
+  authDomain: "ginger-2026.firebaseapp.com",
+  projectId: "ginger-2026",
+  storageBucket: "ginger-2026.appspot.com",
+  messagingSenderId: "921507764844",
+  appId: "1:921507764844:web:d98ac742abb089ba0c1649"
+};
+
+let db = null;
+let firebaseReady = false;
+let firebaseErrorMsg = '';
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  /* חשוב לרשתות סלולריות (במיוחד באנדרואיד): חלק מספקי הסלולר/פרוקסי
+     חוסמים את פרוטוקול ה-streaming הרגיל של פיירסטור, מה שגורם לבקשות
+     "להיתקע" בלי שגיאה ובלי הצלחה. force long polling פותר את זה. */
+  db.settings({ experimentalForceLongPolling: true, useFetchStreams: false });
+  firebaseReady = true;
+}catch(e){
+  firebaseErrorMsg = e.message || 'שגיאת אתחול';
+  console.error('Firebase init error', e);
+}
+
+const FS_COLLECTION = 'ginger-tours-data';
+const FS_TIMEOUT_MS = 12000;
+
+/* ---------------- כניסה עם סיסמת צוות משותפת ----------------
+   כל הצוות משתמש באותה סיסמה. מאחורי הקלעים זה עדיין חשבון Firebase Auth אמיתי
+   (עם אימייל טכני קבוע), וזה מה שמאפשר לחוקי ה-Firestore לדרוש "רק משתמש מחובר".
+   כדי ליצור/לשנות את הסיסמה: Firebase Console > Authentication > Users. */
+const TEAM_LOGIN_EMAIL = 'team@ginger-2026.local';
+let authInited = false;
+
+function doLogin(){
+  const passInput = document.getElementById('login-password');
+  const errEl = document.getElementById('login-error');
+  const pass = passInput ? passInput.value : '';
+  if(errEl) errEl.textContent = '';
+  if(!pass){ if(errEl) errEl.textContent = 'נא להזין סיסמה'; return; }
+  if(!firebaseReady){ if(errEl) errEl.textContent = 'החיבור לפיירבייס לא הושלם.'; return; }
+  try{
+    firebase.auth().signInWithEmailAndPassword(TEAM_LOGIN_EMAIL, pass)
+      .catch(err=>{
+        console.error('Login error', err);
+        if(errEl) errEl.textContent = (err && err.code==='auth/wrong-password') ? 'סיסמה שגויה. נסו שוב.'
+          : 'ההתחברות נכשלה: ' + (err && err.message ? err.message : 'שגיאה לא ידועה') + '\nאם הקובץ נפתח ישירות מהמכשיר (לא מכתובת אינטרנט), זו כנראה הסיבה — ראו הערה בתחתית מסך הכניסה.';
+      });
+  }catch(err){
+    console.error('Login threw synchronously', err);
+    if(errEl) errEl.textContent = 'שגיאה בהתחברות (' + (err && err.message ? err.message : 'לא ידועה') + '). כנראה שהדפדפן חוסם את מנגנון ההתחברות כשהקובץ נפתח ישירות מהמכשיר ולא מכתובת אינטרנט מאובטחת (https).';
+  }
+}
+
+if(firebaseReady){
+  (async function setupAuth(){
+    try{
+      try{
+        await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      }catch(e1){
+        console.error('LOCAL persistence failed, trying SESSION', e1);
+        try{ await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION); }
+        catch(e2){
+          console.error('SESSION persistence failed, trying NONE', e2);
+          await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
+        }
+      }
+      firebase.auth().onAuthStateChanged(function(user){
+        const loginScreen = document.getElementById('login-screen');
+        if(user){
+          if(loginScreen) loginScreen.style.display = 'none';
+          if(!authInited){ authInited = true; init(); }
+        }else{
+          if(loginScreen) loginScreen.style.display = 'flex';
+        }
+      });
+    }catch(e){
+      console.error('Auth setup failed entirely', e);
+      showDebugError('שגיאת התחברות (Auth):\n' + (e && e.message ? e.message : String(e)) + '\n\nכנראה שהדפדפן חוסם את אחסון ההתחברות של פיירבייס. זה קורה בעיקר כשפותחים את קובץ ה-HTML ישירות מהמכשיר במקום מכתובת אינטרנט (https). הפתרון: להעלות את הקובץ לאחסון אינטרנט (למשל Firebase Hosting) ולפתוח אותו משם.');
+      const errEl = document.getElementById('login-error');
+      if(errEl) errEl.textContent = 'שגיאת התחברות סביבתית — ראו הודעה מפורטת שנפתחה על המסך.';
+    }
+  })();
+}
+
+function withTimeout(promise, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject)=> setTimeout(()=> reject(new Error(`תם הזמן להמתנה לפיירבייס (${label}) — ייתכן שיש בעיית רשת/חסימה על הרשת הסלולרית`)), FS_TIMEOUT_MS))
+  ]);
+}
+
+/* ---------------- storage helpers (Firestore-backed) ---------------- */
+async function loadList(key){
+  if(!firebaseReady) return [];
+  try{
+    const doc = await withTimeout(db.collection(FS_COLLECTION).doc(key).get(), 'טעינת '+key);
+    if(doc.exists && Array.isArray(doc.data().items)) return doc.data().items;
+    return [];
+  }catch(e){
+    firebaseErrorMsg = e.message || 'שגיאת קריאה';
+    console.error('Firestore load error', key, e);
+    return [];
+  }
+}
+async function saveList(key, arr){
+  if(!firebaseReady) return;
+  try{
+    await withTimeout(db.collection(FS_COLLECTION).doc(key).set({ items: arr }), 'שמירת '+key);
+    firebaseErrorMsg = '';
+  }catch(e){
+    firebaseErrorMsg = e.message || 'שגיאת שמירה';
+    console.error('Firestore save error', key, e);
+    alert('שמירת הנתונים נכשלה (יתכן ובגלל חיבור אינטרנט): ' + firebaseErrorMsg + '\n\nנסו שוב כשהחיבור יציב יותר, או עברו לרשת Wi-Fi.');
+  }
+}
+
+/* ---------------- state ---------------- */
+let state = { customers: [], groups: [], rooms: [], payments: [], fileLibrary: [], settings: { documentsFolder: '' }, households: [] };
+let ui = { tab:'customers', selectedGroupRooms:null, openGroupId:null, paymentsFilter:'all', search:'' };
+
+const ROOM_TYPES = { single:{label:'סינגל', cap:1}, double:{label:'דאבל', cap:2}, twin:{label:'טווין', cap:2}, triple:{label:'טריפל', cap:3} };
+const ROOM_TYPES_EN = { single:'Single', double:'Double', twin:'Twin', triple:'Triple' };
+
+/* ---------------- סטטוס לקוח ותזכורות ---------------- */
+const CUSTOMER_STATUSES = {
+  interested:   { label:'מתעניין',            pill:'neutral' },
+  infoSent:     { label:'נשלח מידע הטיול',     pill:'neutral' },
+  registered:   { label:'נרשם',                pill:'gold' },
+  paidDeposit:  { label:'שילם מקדמה',          pill:'gold' },
+  paidPartial:  { label:'שילם חלק',            pill:'gold' },
+  paidFull:     { label:'שילם הכל',            pill:'ok' },
+  notInterested:{ label:'לא מעוניין - לא להתקשר יותר', pill:'muted' },
+};
+const REMINDER_DAYS_DEFAULT = 10;
+const MEAL_OPTIONS = ['אוכל רגיל', 'שומר מסורת - כשר', 'צמחוני', 'טבעוני', 'ללא גלוטן'];
+const MEAL_OTHER = 'אחר (הזנה ידנית)';
+const SEAT_OPTIONS = ['מקום רגיל', 'פרימיום', 'ביזנס'];
+const SEAT_OTHER = 'אחר (הזנה ידנית)';
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function addDaysStr(dateStr, days){
+  const base = dateStr ? new Date(dateStr) : new Date();
+  const d = isNaN(base.getTime()) ? new Date() : base;
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+function defaultReminderDate(){ return addDaysStr(todayStr(), REMINDER_DAYS_DEFAULT); }
+function fmtDateDMY(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr);
+  if(isNaN(d.getTime())) return dateStr;
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const target = new Date(dateStr);
+  if(isNaN(target.getTime())) return null;
+  const today = new Date(todayStr());
+  return Math.round((target - today) / 86400000);
+}
+function reminderCell(c){
+  if(c.status === 'notInterested') return `<span class="pill muted" title="הלקוח סימן כלא מעוניין - אין צורך ליצור קשר נוסף">✕ לא מעוניין</span>`;
+  if(!c.reminderDate) return `<span style="color:var(--ink-soft); font-size:12px;">—</span>`;
+  const days = daysUntil(c.reminderDate);
+  let cls = 'ok', label = esc(c.reminderDate);
+  if(days===null){ cls='neutral'; }
+  else if(days < 0){ cls='warn'; label = `⚠ ${esc(c.reminderDate)} (איחור ${Math.abs(days)} ימ׳)`; }
+  else if(days <= 3){ cls='gold'; label = `${esc(c.reminderDate)} (בעוד ${days} ימ׳)`; }
+  else{ cls='neutral'; }
+  return `<span class="pill ${cls}">${label}</span>`;
+}
+function statusCell(c){
+  const s = CUSTOMER_STATUSES[c.status] || CUSTOMER_STATUSES.interested;
+  return `<span class="pill ${s.pill}">${esc(s.label)}</span>`;
+}
+
+async function saveFileDoc(fileId, data){
+  if(!firebaseReady) return false;
+  try{
+    await withTimeout(db.collection(FS_COLLECTION).doc('file_'+fileId).set(data), 'שמירת קובץ');
+    return true;
+  }catch(e){
+    console.error('Firestore file save error', e);
+    alert('שמירת הקובץ נכשלה: ' + (e.message||'שגיאה') + '\n\nיתכן שהקובץ גדול מדי, נסו קובץ קטן יותר.');
+    return false;
+  }
+}
+async function loadFileDoc(fileId){
+  if(!firebaseReady) return null;
+  try{
+    const doc = await withTimeout(db.collection(FS_COLLECTION).doc('file_'+fileId).get(), 'טעינת קובץ');
+    return doc.exists ? doc.data() : null;
+  }catch(e){
+    console.error('Firestore file load error', e);
+    alert('טעינת הקובץ נכשלה: ' + (e.message||'שגיאה'));
+    return null;
+  }
+}
+async function deleteFileDoc(fileId){
+  if(!firebaseReady) return;
+  try{
+    await withTimeout(db.collection(FS_COLLECTION).doc('file_'+fileId).delete(), 'מחיקת קובץ');
+  }catch(e){
+    console.error('Firestore file delete error', e);
+  }
+}
+async function loadSettings(){
+  if(!firebaseReady) return { documentsFolder: '' };
+  try{
+    const doc = await withTimeout(db.collection(FS_COLLECTION).doc('app_settings').get(), 'טעינת הגדרות');
+    return doc.exists ? Object.assign({documentsFolder:''}, doc.data()) : { documentsFolder: '' };
+  }catch(e){
+    console.error('Firestore settings load error', e);
+    return { documentsFolder: '' };
+  }
+}
+async function saveSettings(settings){
+  if(!firebaseReady) return;
+  try{
+    await withTimeout(db.collection(FS_COLLECTION).doc('app_settings').set(settings), 'שמירת הגדרות');
+  }catch(e){
+    console.error('Firestore settings save error', e);
+    alert('שמירת ההגדרות נכשלה: ' + (e.message||'שגיאה'));
+  }
+}
+function readAsDataURL(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = ()=>reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ---------------- ספריית קבצים משותפת ----------------
+   כל קובץ מאוחסן פעם אחת בלבד (כמסמך נפרד ב-Firestore, כדי לא לחרוג
+   ממגבלת הגודל של מסמך). ברשומת כל לקוח נשמר רק מזהה + תאריך צירוף,
+   כך שאפשר לצרף את אותו קובץ לכמה לקוחות בלי לשכפל את התוכן. */
+function getLibraryFile(fileId){ return state.fileLibrary.find(f=>f.id===fileId); }
+function getCustomerFiles(c){
+  if(!Array.isArray(c.files)) c.files = [];
+  // תאימות לאחור לקבצים שצורפו לפני המעבר לספרייה משותפת (היה שדה id, לא fileId)
+  c.files = c.files.map(f => f.fileId ? f : { fileId:f.id, attachedAt: f.uploadedAt||'' });
+  return c.files;
+}
+function filesCell(c){
+  const files = getCustomerFiles(c);
+  const count = files.length;
+  return count
+    ? `<button class="btn ghost small" onclick="openFilesModal('${c.id}')">📎 ${count} קבצים</button>`
+    : `<button class="btn ghost small" onclick="openFilesModal('${c.id}')">+ צירוף קובץ</button>`;
+}
+async function uploadToLibrary(file){
+  const fileId = uid();
+  state.fileLibrary.push({ id:fileId, name:file.name, uploadedAt: todayStr(), size:file.size });
+  await saveList('fileLibrary', state.fileLibrary);
+  return fileId;
+}
+async function viewFile(fileId){
+  const meta = getLibraryFile(fileId);
+  if(!meta){ alert('לא נמצא מידע על הקובץ.'); return; }
+  // תאימות לאחור: קבצים ישנים שעדיין שמורים במלואם ב-Firestore ניתנים להורדה כרגיל
+  const data = await loadFileDoc(fileId);
+  if(data && data.dataUrl){
+    const a = document.createElement('a');
+    a.href = data.dataUrl;
+    a.download = data.name || meta.name || 'קובץ';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+  // קבצים חדשים: התוכן לא נשמר בענן (כדי לא להעמיס על קבצים גדולים) - הקובץ נשאר במחשב שלכם
+  const folder = (state.settings && state.settings.documentsFolder) ? state.settings.documentsFolder : null;
+  alert(folder
+    ? `הקובץ "${meta.name}" נמצא במחשב שלכם בתיקייה:\n${folder}`
+    : `הקובץ "${meta.name}" נשמר רק במחשב שלכם ולא בענן. הגדירו את תיקיית המסמכים בספריית הקבצים כדי לראות תזכורת למיקום המדויק.`);
+}
+// שולח קובץ ספציפי ללקוח: פותח טיוטת מייל מוכנה בתוכנת המייל של המשתמש, עם תזכורת לאיפה הקובץ יושב במחשב.
+// לא ניתן לצרף קובץ אוטומטית למייל מתוך דפדפן (מגבלת אבטחה של הדפדפן/מערכת ההפעלה) -
+// הקובץ כבר נמצא במחשב שלכם (לא הועלה לענן), כך שאין צורך להוריד אותו - רק לצרף אותו ידנית מתוך התיקייה שהגדרתם.
+async function emailFileToCustomer(customerId, fileId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  if(!c.email || !c.email.trim()){ alert('ללקוח זה לא הוגדרה כתובת מייל.'); return; }
+  const meta = getLibraryFile(fileId);
+  if(!meta){ alert('לא נמצא מידע על הקובץ.'); return; }
+  const fileName = meta.name || 'קובץ';
+  const folder = (state.settings && state.settings.documentsFolder) ? state.settings.documentsFolder : '';
+  const name = c.firstHe || c.firstEn || '';
+  const RLM = '\u200F'; // סימן כיווניות ימין-לשמאל, כדי לעזור לתוכנות מייל ליישר את הטקסט העברי לימין
+  const subject = `${RLM}המסמך "${fileName}" - ג'ינג'ר תיירות`;
+  const bodyLines = [
+    `${name?name+' היקר/ה':'שלום'},`,
+    '',
+    `מצורף המסמך "${fileName}".`,
+    folder ? `(הקובץ נמצא בתיקייה: ${folder})` : '(יש לצרף את הקובץ מהתיקייה במחשב שבה שמור המסמך)',
+    '',
+    'בברכה,',
+    `צוות ג'ינג'ר תיירות`
+  ];
+  const body = bodyLines.map(line=>RLM+line).join('\n');
+  const mailtoLink = `mailto:${c.email.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailtoLink;
+}
+
+/* ---------------- חלון קבצים של לקוח ספציפי ---------------- */
+function openFilesModal(customerId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  const files = getCustomerFiles(c);
+  const attachedIds = new Set(files.map(f=>f.fileId));
+  const available = state.fileLibrary.filter(f=>!attachedIds.has(f.id));
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal">
+      <div class="modal-head"><h3>קבצים שנשלחו — ${esc(customerName(c))}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <p style="font-size:12.5px; color:var(--ink-soft); margin-top:0;">לחיצה על ✉ תפתח טיוטת מייל מוכנה לאותו לקוח, עם תזכורת לאיפה הקובץ שמור במחשב שלכם (בהתאם לתיקייה שהגדרתם בספריית הקבצים) - יש לצרף את הקובץ מהתיקייה ולשלוח (דפדפן לא יכול לצרף קובץ למייל באופן אוטומטי).</p>
+        <table>
+          <thead><tr><th>שם קובץ</th><th>תאריך צירוף ללקוח</th><th></th></tr></thead>
+          <tbody>
+            ${files.length ? files.map(f=>{
+              const meta = getLibraryFile(f.fileId);
+              return `<tr>
+                <td>${esc(meta ? meta.name : '(קובץ לא נמצא בספרייה)')}</td>
+                <td class="mono">${esc(f.attachedAt||'—')}</td>
+                <td>
+                  <button class="icon-btn" onclick="viewFile('${f.fileId}')" title="הצגה/הורדה">⬇</button>
+                  <button class="icon-btn" onclick="emailFileToCustomer('${customerId}','${f.fileId}')" title="${c.email && c.email.trim() ? 'שליחת הקובץ במייל ל'+esc(c.email.trim()) : 'ללקוח אין כתובת מייל'}" ${c.email && c.email.trim() ? '' : 'disabled'}>✉</button>
+                  <button class="icon-btn del" onclick="unattachFile('${customerId}','${f.fileId}')" title="הסרה מהלקוח (הקובץ נשאר בספרייה)">✕</button>
+                </td>
+              </tr>`;
+            }).join('') : `<tr><td colspan="3" style="color:var(--ink-soft); font-size:13px;">אין עדיין קבצים מצורפים</td></tr>`}
+          </tbody>
+        </table>
+
+        <div class="field full" style="margin-top:16px;">
+          <label>צירוף קובץ קיים מהספרייה</label>
+          <div style="display:flex; gap:8px;">
+            <select id="f-library-select" style="flex:1;" ${available.length?'':'disabled'}>
+              ${available.length ? available.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join('') : `<option value="">— אין קבצים זמינים בספרייה —</option>`}
+            </select>
+            <button class="btn ghost small" onclick="attachLibraryFile('${customerId}', document.getElementById('f-library-select').value)" ${available.length?'':'disabled'}>צירוף</button>
+          </div>
+        </div>
+
+        <div class="field full" style="margin-top:12px;">
+          <label>או רישום קובץ חדש בספרייה (יצורף אוטומטית ללקוח זה; רק שם הקובץ נשמר, התוכן נשאר במחשב שלכם)</label>
+          <input type="file" id="f-newfile" onchange="handleNewFileForCustomer('${customerId}')">
+          <div id="file-upload-status" style="font-size:12px; color:var(--ink-soft); margin-top:4px;"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" onclick="closeModal()">סגירה</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function handleNewFileForCustomer(customerId){
+  const input = document.getElementById('f-newfile');
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('file-upload-status');
+  if(statusEl) statusEl.textContent = 'מעלה קובץ…';
+  const fileId = await uploadToLibrary(file);
+  input.value = '';
+  if(!fileId){ if(statusEl) statusEl.textContent=''; render(); openFilesModal(customerId); return; }
+  await attachLibraryFile(customerId, fileId);
+}
+async function attachLibraryFile(customerId, fileId){
+  if(!fileId){ return; }
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  const files = getCustomerFiles(c);
+  if(!files.some(f=>f.fileId===fileId)){
+    files.push({ fileId, attachedAt: todayStr() });
+    await saveList('customers', state.customers);
+    await autoUpdateFileStatus(customerId);
+  }
+  render();
+  openFilesModal(customerId);
+}
+async function unattachFile(customerId, fileId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  c.files = getCustomerFiles(c).filter(f=>f.fileId!==fileId);
+  await saveList('customers', state.customers);
+  render();
+  openFilesModal(customerId);
+}
+async function autoUpdateFileStatus(customerId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  const files = getCustomerFiles(c);
+  if(files.length>=1 && (c.status||'interested')==='interested'){
+    c.status = 'infoSent';
+    await saveList('customers', state.customers);
+  }
+}
+
+/* ---------------- ניהול ספריית הקבצים המשותפת (כללי, לא תלוי לקוח) ---------------- */
+function openLibraryModal(){
+  function usageCount(fileId){
+    return state.customers.filter(c => getCustomerFiles(c).some(f=>f.fileId===fileId)).length;
+  }
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal">
+      <div class="modal-head"><h3>ספריית קבצים</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">קבצים בספרייה נשמרים פעם אחת, ואפשר לצרף אותם לכמה לקוחות בלי להעלות אותם מחדש בכל פעם.</p>
+        <div class="field full" style="margin-bottom:16px;">
+          <label>תיקיית מסמכים במחשב (איפה שמורים הקבצים המקוריים אצלכם)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="f-docs-folder" style="flex:1;" value="${esc(state.settings.documentsFolder||'')}" placeholder="לדוגמה: C:\\Users\\שם\\Documents\\ג'ינג'ר תיירות\\מסמכים">
+            <button class="btn ghost small" onclick="saveDocsFolder()">שמירה</button>
+          </div>
+          <p style="font-size:12px; color:var(--ink-soft); margin:4px 0 0;">הקבצים עצמם לא נשמרים בענן (כדי לא להעמיס על קבצים גדולים) - רק שמם. הנתיב כאן ישמש כתזכורת בכל פעם שתרצו לצרף קובץ למייל.</p>
+        </div>
+        <table>
+          <thead><tr><th>שם קובץ</th><th>הועלה בתאריך</th><th>בשימוש אצל</th><th></th></tr></thead>
+          <tbody>
+            ${state.fileLibrary.length ? state.fileLibrary.map(f=>`
+            <tr>
+              <td>${esc(f.name)}</td>
+              <td class="mono">${esc(f.uploadedAt||'—')}</td>
+              <td class="mono">${usageCount(f.id)} לקוחות</td>
+              <td>
+                <button class="icon-btn" onclick="viewFile('${f.id}')" title="הצגה/הורדה">⬇</button>
+                <button class="icon-btn del" onclick="deleteLibraryFile('${f.id}')" title="מחיקה מהספרייה">✕</button>
+              </td>
+            </tr>`).join('') : `<tr><td colspan="4" style="color:var(--ink-soft); font-size:13px;">הספרייה ריקה</td></tr>`}
+          </tbody>
+        </table>
+        <div class="field full" style="margin-top:16px;">
+          <label>רישום קובץ חדש בספרייה (רק שם הקובץ נשמר, התוכן נשאר במחשב שלכם)</label>
+          <input type="file" id="f-library-newfile" onchange="handleNewLibraryFile()">
+          <div id="library-upload-status" style="font-size:12px; color:var(--ink-soft); margin-top:4px;"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" onclick="closeModal()">סגירה</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function saveDocsFolder(){
+  const val = document.getElementById('f-docs-folder').value.trim();
+  state.settings.documentsFolder = val;
+  await saveSettings(state.settings);
+  openLibraryModal();
+}
+async function handleNewLibraryFile(){
+  const input = document.getElementById('f-library-newfile');
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('library-upload-status');
+  if(statusEl) statusEl.textContent = 'מעלה קובץ…';
+  const fileId = await uploadToLibrary(file);
+  input.value = '';
+  if(statusEl) statusEl.textContent = fileId ? '' : '';
+  openLibraryModal();
+}
+async function deleteLibraryFile(fileId){
+  const usedBy = state.customers.filter(c => getCustomerFiles(c).some(f=>f.fileId===fileId)).length;
+  const msg = usedBy>0
+    ? `הקובץ מצורף כרגע ל-${usedBy} לקוחות. מחיקתו תסיר אותו גם מהלקוחות האלה. להמשיך?`
+    : 'למחוק את הקובץ מהספרייה?';
+  if(!confirm(msg)) return;
+  state.customers.forEach(c=>{ c.files = getCustomerFiles(c).filter(f=>f.fileId!==fileId); });
+  await saveList('customers', state.customers);
+  state.fileLibrary = state.fileLibrary.filter(f=>f.id!==fileId);
+  await saveList('fileLibrary', state.fileLibrary);
+  await deleteFileDoc(fileId);
+  render();
+  openLibraryModal();
+}
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+
+function esc(s){ return (s===undefined||s===null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtMoney(n){ return (Number(n)||0).toLocaleString('he-IL'); }
+function parseAmount(v){
+  const cleaned = String(v||'').replace(/[^\d.\-]/g,'');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+function customerName(c){ return c ? `${c.lastHe||''} ${c.firstHe||''}`.trim() : '—'; }
+
+/* ---------------- ימי הולדת: חישוב תאריך הבא + קישור לשליחת ברכה ---------------- */
+// מחזיר כמה ימים נותרו עד יום ההולדת הבא של הלקוח, ובאיזה גיל יחגוג (או null אם אין/לא תקין תאריך לידה)
+function nextBirthdayInfo(dob){
+  if(!dob) return null;
+  const d = new Date(dob);
+  if(isNaN(d.getTime())) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  let next = new Date(today.getFullYear(), d.getMonth(), d.getDate());
+  if(next < today) next = new Date(today.getFullYear()+1, d.getMonth(), d.getDate());
+  const daysUntil = Math.round((next - today)/(1000*60*60*24));
+  const turningAge = next.getFullYear() - d.getFullYear();
+  return { daysUntil, turningAge, isToday: daysUntil===0, month:d.getMonth(), day:d.getDate() };
+}
+// בונה קישור mailto עם נושא וגוף מייל ברכה מוכנים מראש (המשתמש לוחץ ושולח דרך תוכנת המייל שלו)
+function birthdayEmailLink(c){
+  const name = c.firstHe || c.firstEn || '';
+  const RLM = '\u200F';
+  const subject = `${RLM}יום הולדת שמח${name?', '+name:''}! 🎂`;
+  const bodyLines = [
+    `${name?name+' היקר/ה':'שלום'},`,
+    '',
+    `צוות ג'ינג'ר תיירות מאחל לך יום הולדת שמח, שנה טובה, בריאות ואושר!`,
+    'מקווים לראותך שוב בדרכים שלנו בקרוב 🌍✈️',
+    '',
+    'בברכה,',
+    `צוות ג'ינג'ר תיירות`
+  ];
+  const body = bodyLines.map(line=>RLM+line).join('\n');
+  return `mailto:${c.email||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+// כרטיס עם רשימת ימי הולדת ב-30 הימים הקרובים, וכפתור לשליחת ברכה לכל לקוח
+function birthdayBanner(){
+  const items = state.customers
+    .map(c=>({c, info:nextBirthdayInfo(c.dob)}))
+    .filter(x=>x.info && x.info.daysUntil<=30)
+    .sort((a,b)=>a.info.daysUntil-b.info.daysUntil);
+  if(!items.length) return '';
+  const rows = items.map(({c,info})=>{
+    const dd = String(info.day).padStart(2,'0');
+    const mm = String(info.month+1).padStart(2,'0');
+    const whenLabel = info.isToday
+      ? `<span class="pill warn">היום! 🎉</span>`
+      : `<span class="pill neutral">בעוד ${info.daysUntil} ימים</span>`;
+    const hasEmail = !!(c.email && c.email.trim());
+    const btn = hasEmail
+      ? `<a class="btn small gold" style="display:inline-block; text-decoration:none;" href="${birthdayEmailLink(c)}">✉ שליחת ברכה</a>`
+      : `<span class="btn small ghost" style="opacity:.5; cursor:not-allowed; display:inline-block;" title="אין כתובת מייל ללקוח זה">✉ אין מייל</span>`;
+    return `
+    <tr>
+      <td><b>${esc(customerName(c))}</b></td>
+      <td class="mono">${dd}/${mm}</td>
+      <td>${info.turningAge}</td>
+      <td>${whenLabel}</td>
+      <td>${btn}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="card" style="border-color:var(--gold);">
+      <h2 style="color:var(--gold-deep);">🎂 ימי הולדת קרובים (30 הימים הקרובים)</h2>
+      <table>
+        <thead><tr><th>שם</th><th>תאריך</th><th>גיל שיחגגו</th><th>מתי</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+let dataLoading = false;
+
+async function init(){
+  // הפעלת הלשוניות תמיד קודם כל, בלי קשר למצב החיבור לפיירבייס,
+  // כדי שהממשק לעולם לא "יתקע" גם אם הטעינה מפיירבייס נכשלת/נתקעת.
+  document.querySelectorAll('nav.tabs button').forEach(b=>{
+    b.addEventListener('click', ()=>{ ui.tab=b.dataset.tab; render(); });
+  });
+
+  if(!firebaseReady || firebaseConfig.apiKey === 'YOUR_API_KEY'){
+    render();
+    return;
+  }
+
+  dataLoading = true;
+  render();
+  const [customers, groups, rooms, payments, fileLibrary, settings, households] = await Promise.all([
+    loadList('customers'), loadList('groups'), loadList('rooms'), loadList('payments'), loadList('fileLibrary'), loadSettings(), loadList('households')
+  ]);
+  state.customers = customers; state.groups = groups; state.rooms = rooms; state.payments = payments; state.fileLibrary = fileLibrary; state.settings = settings; state.households = households;
+  dataLoading = false;
+  render();
+}
+
+function connectionBanner(){
+  if(!firebaseReady || firebaseConfig.apiKey === 'YOUR_API_KEY'){
+    return `
+      <div class="card" style="border-color:var(--coral);">
+        <h2 style="color:var(--coral);">⚠ חיבור לפיירבייס לא הושלם</h2>
+        <p style="font-size:14px; line-height:1.7;">
+          כדי שהנתונים יישמרו לצמיתות, יש להזין את פרטי פרויקט הפיירבייס שלכם בקובץ.
+          פתחו את הקובץ בעורך טקסט, חפשו את המשתנה <code>firebaseConfig</code> בראש הקוד (בתוך תגית ה-<code>&lt;script&gt;</code>),
+          והחליפו את הערכים בפרטים האמיתיים מ-Firebase Console (הגדרות פרויקט → Your apps → SDK setup).
+        </p>
+        ${firebaseErrorMsg ? `<p class="mono" style="font-size:12.5px; color:var(--coral);">שגיאה: ${esc(firebaseErrorMsg)}</p>` : ''}
+      </div>`;
+  }
+  if(dataLoading){
+    return `<div class="card"><p style="font-size:13.5px;color:var(--ink-soft);">טוען נתונים מפיירבייס…</p></div>`;
+  }
+  if(firebaseErrorMsg){
+    return `
+      <div class="card" style="border-color:var(--coral);">
+        <h2 style="color:var(--coral);">⚠ שגיאת תקשורת עם פיירבייס</h2>
+        <p style="font-size:13.5px; line-height:1.6;">הפעולה האחרונה מול פיירבייס נכשלה. סביר שמדובר בכללי אבטחה (Firestore Rules) שחוסמים קריאה/כתיבה, או שמסד הנתונים (Firestore Database) עדיין לא נוצר בפרויקט.</p>
+        <p class="mono" style="font-size:12.5px; color:var(--coral);">שגיאה: ${esc(firebaseErrorMsg)}</p>
+      </div>`;
+  }
+  return '';
+}
+
+function onSearchInput(input){
+  ui.search = input.value;
+  const pos = input.selectionStart;
+  render();
+  const el = document.querySelector('.search-box');
+  if(el){
+    el.focus();
+    el.setSelectionRange(pos, pos);
+  }
+}
+function render(){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===ui.tab));
+  document.getElementById('cnt-customers').textContent = state.customers.length || '';
+  document.getElementById('cnt-rooms').textContent = state.rooms.length || '';
+  document.getElementById('cnt-payments').textContent = state.payments.length || '';
+  document.getElementById('cnt-groups').textContent = state.groups.length || '';
+  const c = document.getElementById('content');
+  const banner = connectionBanner();
+  if(!firebaseReady || firebaseConfig.apiKey === 'YOUR_API_KEY'){
+    c.innerHTML = banner;
+    return;
+  }
+  let body = '';
+  if(ui.tab==='customers') body = viewCustomers();
+  else if(ui.tab==='rooms') body = viewRooms();
+  else if(ui.tab==='payments') body = viewPayments();
+  else if(ui.tab==='groups') body = viewGroups();
+  c.innerHTML = banner + body;
+}
+
+/* ================= CUSTOMERS ================= */
+function viewCustomers(){
+  const list = state.customers.filter(c=>{
+    if(!ui.search) return true;
+    const s = ui.search.toLowerCase();
+    return [c.firstHe,c.lastHe,c.firstEn,c.lastEn,c.passportNo,c.phone,c.email,c.notes,c.mealType,c.seatClass].some(v=>(v||'').toLowerCase().includes(s));
+  });
+  const passportIssues = state.customers
+    .map(c=>({c, chk:passportValidityCheck(c)}))
+    .filter(x=>x.chk.status==='warn');
+  const issuesBanner = passportIssues.length ? `
+    <div class="card" style="border-color:var(--coral);">
+      <h2 style="color:var(--coral);">⚠ בדיקת תוקף דרכונים — נמצאו ${passportIssues.length} בעיות</h2>
+      <table>
+        <thead><tr><th>שם</th><th>קבוצה</th><th>תאריך טיסה</th><th>תוקף דרכון</th><th>בעיה</th></tr></thead>
+        <tbody>
+          ${passportIssues.map(({c,chk})=>`
+            <tr>
+              <td><b>${esc(customerName(c))}</b></td>
+              <td>${esc(chk.groupName)}</td>
+              <td class="mono">${esc(chk.flightDate)}</td>
+              <td class="mono">${esc(c.passportExp)}</td>
+              <td><span class="pill warn">${esc(passportCheckLabel(chk))}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+  let rows = list.map(c=>{
+    const g = findGroupOf(c.id);
+    const r = findRoomOf(c.id);
+    const groupCell = g
+      ? `<span class="pill neutral" style="cursor:pointer" onclick="goToGroup('${g.id}')" title="מעבר לקבוצה">${esc(g.name)}</span>`
+      : `<span style="color:var(--ink-soft); font-size:12px;">לא משויך</span>`;
+    const roomCell = r
+      ? `<span class="pill neutral" style="cursor:pointer" onclick="goToRoomsFor('${r.groupId}')" title="מעבר לשיבוץ החדרים">${ROOM_TYPES[r.type].label}</span>`
+      : `<span style="color:var(--ink-soft); font-size:12px;">${g?'לא שובץ':'—'}</span>`;
+    const chk = passportValidityCheck(c);
+    const passportCheckCell = chk.status==='unknown'
+      ? `<span style="color:var(--ink-soft); font-size:12px;">—</span>`
+      : chk.status==='ok'
+        ? `<span class="pill ok">✓ ${Math.floor(chk.months)}+ ח׳</span>`
+        : `<span class="pill warn" title="${esc(passportCheckLabel(chk))}">⚠ ${chk.months<0?'פג תוקף':chk.months.toFixed(1)+' ח׳'}</span>`;
+    const partners = householdPartners(c.id);
+    const coupleCell = partners.length
+      ? `<span class="pill neutral" title="תשלום משותף עם ${esc(partners.map(m=>customerName(m)).join(', '))}">👪 ${esc(partners.map(m=>customerName(m)).join(', '))}</span> <button class="icon-btn" style="font-size:11px;" onclick="unlinkHousehold('${c.id}')" title="ניתוק התא המשפחתי">🔓</button>`
+      : `<button class="btn ghost small" style="padding:2px 8px; font-size:11.5px;" onclick="openLinkCoupleModal('${c.id}')" title="קישור לבן/בת זוג - תשלום משותף">🔗 קישור לזוג</button>`;
+    return `
+    <tr>
+      <td>
+        <button class="icon-btn" onclick="openCustomerModal('${c.id}')" title="עריכה">✎</button>
+      </td>
+      <td><b>${esc(customerName(c))}</b><br><span class="ltr mono" style="font-size:12px;color:var(--ink-soft)">${esc(c.firstEn||'')} ${esc(c.lastEn||'')}</span></td>
+      <td>${statusCell(c)}</td>
+      <td>${filesCell(c)}</td>
+      <td>${reminderCell(c)}</td>
+      <td>${groupCell}</td>
+      <td>${roomCell}</td>
+      <td>${coupleCell}</td>
+      <td class="mono">${esc(c.passportNo||'—')}</td>
+      <td class="mono">${esc(c.passportExp||'—')}</td>
+      <td>${passportCheckCell}</td>
+      <td>${esc(c.phone||'—')}</td>
+      <td class="ltr mono" style="font-size:12.5px">${c.email && c.email.trim() ? `<a href="mailto:${esc(c.email.trim())}" style="color:inherit;">${esc(c.email)}</a>` : '—'}</td>
+      <td class="mono">${esc(c.dob||'—')}</td>
+      <td>${esc(c.mealType||'אוכל רגיל')}</td>
+      <td>${esc(c.seatClass||'מקום רגיל')}</td>
+      <td style="max-width:160px; font-size:12.5px; color:var(--ink-soft);" title="${esc(c.notes||'')}">${c.notes ? esc(c.notes.length>40 ? c.notes.slice(0,40)+'…' : c.notes) : '—'}</td>
+      <td>
+        ${(g||r) ? `<button class="icon-btn del" onclick="removeCustomerFromTrip('${c.id}')" title="הסרה מהקבוצה ומהחדרים (הלקוח יישאר במאגר)">🚫</button>` : `<span style="color:var(--ink-soft); font-size:12px;">—</span>`}
+      </td>
+    </tr>`;}).join('');
+  if(!list.length) rows = `<tr><td colspan="18"><div class="empty"><div class="stamp">${ui.search?'לא נמצאו תוצאות התואמות לחיפוש':'אין עדיין לקוחות. הוסיפו את הלקוח הראשון כדי להתחיל'}</div></div></td></tr>`;
+  return `
+  ${birthdayBanner()}
+  ${issuesBanner}
+  <div class="card">
+    <div class="section-head">
+      <h2>כרטיסי לקוח</h2>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <input class="search-box" placeholder="חיפוש לקוח..." value="${esc(ui.search)}" oninput="onSearchInput(this)">
+        <button class="btn ghost" onclick="openLibraryModal()">📁 ספריית קבצים</button>
+        <button class="btn ghost" onclick="downloadImportTemplate()" title="הורדת קובץ אקסל ריק במבנה הנכון למילוי">⭳ ייצוא לאקסל</button>
+        <button class="btn ghost" onclick="document.getElementById('import-customers-file').click()" title="ייבוא לקוחות מקובץ אקסל שמולא לפי התבנית">⭱ ייבוא מאקסל</button>
+        <input type="file" id="import-customers-file" accept=".xlsx,.xls" style="display:none" onchange="handleImportCustomersFile(this)">
+        <button class="btn gold" onclick="openCustomerModal()">+ הוספת לקוח</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>עריכה</th><th>שם</th><th>סטטוס</th><th>קובץ שנשלח</th><th>תזכורת ליצירת קשר</th><th>קבוצה</th><th>חדר</th><th>תא משפחתי</th><th>מס׳ דרכון</th><th>תוקף דרכון</th><th>תוקף מול טיסה</th><th>טלפון</th><th>מייל</th><th>תאריך לידה</th><th>אוכל בטיסה</th><th>מקום בטיסה</th><th>הערות</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+  <div id="modal-root"></div>`;
+}
+
+function openCustomerModal(id){
+  const c = id ? state.customers.find(x=>x.id===id) : null;
+  const v = c || {};
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal">
+      <div class="modal-head"><h3>${c?'עריכת לקוח':'לקוח חדש'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <div class="field-grid">
+          <div class="field"><label>שם פרטי (עברית)</label><input id="f-firstHe" value="${esc(v.firstHe)}"></div>
+          <div class="field"><label>שם משפחה (עברית)</label><input id="f-lastHe" value="${esc(v.lastHe)}"></div>
+          <div class="field"><label>First Name (English)</label><input class="ltr" id="f-firstEn" value="${esc(v.firstEn)}"></div>
+          <div class="field"><label>Last Name (English)</label><input class="ltr" id="f-lastEn" value="${esc(v.lastEn)}"></div>
+          <div class="field"><label>תאריך לידה</label><input type="date" id="f-dob" value="${esc(v.dob)}"></div>
+          <div class="field"><label>טלפון</label><input id="f-phone" value="${esc(v.phone)}"></div>
+          <div class="field full"><label>כתובת מייל</label><input class="ltr" type="email" id="f-email" value="${esc(v.email)}"></div>
+          <div class="field"><label>מספר דרכון</label><input class="ltr mono" id="f-passportNo" value="${esc(v.passportNo)}"></div>
+          <div class="field"><label>תוקף דרכון</label><input type="date" id="f-passportExp" value="${esc(v.passportExp)}"></div>
+          <div class="field">
+            <label>סטטוס לקוח</label>
+            <select id="f-status" data-prev="${esc(v.status||'interested')}" onchange="onStatusFieldChange()">
+              ${Object.entries(CUSTOMER_STATUSES).map(([key,s])=>`<option value="${key}" ${((v.status||'interested')===key)?'selected':''}>${esc(s.label)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field" id="f-reminderDate-wrap" style="${(v.status==='notInterested')?'display:none;':''}">
+            <label>תזכורת ליצירת קשר</label>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="date" id="f-reminderDate" value="${esc(v.reminderDate||defaultReminderDate())}" style="flex:1;">
+              <button type="button" class="btn ghost small" style="white-space:nowrap;" onclick="document.getElementById('f-reminderDate').value=defaultReminderDate();" title="קביעת תזכורת ל-10 ימים מהיום">10 ימים מהיום</button>
+            </div>
+          </div>
+          <div class="field" id="f-reminderDate-none" style="${(v.status==='notInterested')?'':'display:none;'}">
+            <label>תזכורת ליצירת קשר</label>
+            <p style="font-size:12.5px; color:var(--ink-soft); margin:8px 0 0; line-height:1.5;">הלקוח סומן כ"לא מעוניין" — לא תוצג תזכורת ואין צורך ליצור קשר נוסף.</p>
+          </div>
+          <div class="field">
+            <label>העדפת אוכל בטיסה</label>
+            <select id="f-mealType" onchange="onMealTypeChange()">
+              ${MEAL_OPTIONS.map(o=>`<option value="${esc(o)}" ${((v.mealType||'אוכל רגיל')===o)?'selected':''}>${esc(o)}</option>`).join('')}
+              <option value="${esc(MEAL_OTHER)}" ${(v.mealType && !MEAL_OPTIONS.includes(v.mealType))?'selected':''}>${esc(MEAL_OTHER)}</option>
+            </select>
+          </div>
+          <div class="field" id="f-mealTypeCustom-wrap" style="${(v.mealType && !MEAL_OPTIONS.includes(v.mealType))?'':'display:none;'}">
+            <label>פירוט העדפת האוכל</label>
+            <input id="f-mealTypeCustom" value="${esc((v.mealType && !MEAL_OPTIONS.includes(v.mealType)) ? v.mealType : '')}" placeholder="פרטו את סוג האוכל...">
+          </div>
+          <div class="field">
+            <label>מקום בטיסה</label>
+            <select id="f-seatClass" onchange="onSeatClassChange()">
+              ${SEAT_OPTIONS.map(o=>`<option value="${esc(o)}" ${((v.seatClass||'מקום רגיל')===o)?'selected':''}>${esc(o)}</option>`).join('')}
+              <option value="${esc(SEAT_OTHER)}" ${(v.seatClass && !SEAT_OPTIONS.includes(v.seatClass))?'selected':''}>${esc(SEAT_OTHER)}</option>
+            </select>
+          </div>
+          <div class="field" id="f-seatClassCustom-wrap" style="${(v.seatClass && !SEAT_OPTIONS.includes(v.seatClass))?'':'display:none;'}">
+            <label>פירוט מקום בטיסה</label>
+            <input id="f-seatClassCustom" value="${esc((v.seatClass && !SEAT_OPTIONS.includes(v.seatClass)) ? v.seatClass : '')}" placeholder="פרטו את סוג המקום...">
+          </div>
+          <div class="field full"><label>הערות</label><textarea id="f-notes" placeholder="הערה חופשית על הלקוח...">${esc(v.notes||'')}</textarea></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn gold" onclick="saveCustomer('${c?c.id:''}')">${c?'שמירת שינויים':'הוספת לקוח'}</button>
+        <button class="btn ghost" onclick="closeModal()">ביטול</button>
+      </div>
+    </div>
+  </div>`;
+}
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+
+function onStatusFieldChange(){
+  const sel = document.getElementById('f-status');
+  if(sel.value !== sel.dataset.prev){
+    if(sel.value !== 'notInterested'){
+      document.getElementById('f-reminderDate').value = defaultReminderDate();
+    }
+    sel.dataset.prev = sel.value;
+  }
+  const isNotInterested = sel.value === 'notInterested';
+  document.getElementById('f-reminderDate-wrap').style.display = isNotInterested ? 'none' : '';
+  document.getElementById('f-reminderDate-none').style.display = isNotInterested ? '' : 'none';
+}
+
+function onMealTypeChange(){
+  const sel = document.getElementById('f-mealType');
+  const wrap = document.getElementById('f-mealTypeCustom-wrap');
+  wrap.style.display = (sel.value === MEAL_OTHER) ? '' : 'none';
+  if(sel.value !== MEAL_OTHER) document.getElementById('f-mealTypeCustom').value = '';
+}
+
+function onSeatClassChange(){
+  const sel = document.getElementById('f-seatClass');
+  const wrap = document.getElementById('f-seatClassCustom-wrap');
+  wrap.style.display = (sel.value === SEAT_OTHER) ? '' : 'none';
+  if(sel.value !== SEAT_OTHER) document.getElementById('f-seatClassCustom').value = '';
+}
+
+function normalizePhone(p){ return (p||'').replace(/[^\d]/g,''); }
+function findDuplicateCustomers(data, excludeId){
+  const nameKeyHe = ((data.firstHe||'')+' '+(data.lastHe||'')).trim().toLowerCase();
+  const nameKeyEn = ((data.firstEn||'')+' '+(data.lastEn||'')).trim().toLowerCase();
+  const phoneKey = normalizePhone(data.phone);
+  return state.customers.filter(c=>{
+    if(excludeId && c.id===excludeId) return false;
+    const cNameHe = ((c.firstHe||'')+' '+(c.lastHe||'')).trim().toLowerCase();
+    const cNameEn = ((c.firstEn||'')+' '+(c.lastEn||'')).trim().toLowerCase();
+    const cPhone = normalizePhone(c.phone);
+    const nameMatch = (nameKeyHe && cNameHe && cNameHe===nameKeyHe) || (nameKeyEn && cNameEn && cNameEn===nameKeyEn);
+    const phoneMatch = phoneKey && cPhone && cPhone===phoneKey;
+    return nameMatch || phoneMatch;
+  });
+}
+async function saveCustomer(id){
+  const get = k=>document.getElementById('f-'+k).value.trim();
+  const mealSel = get('mealType');
+  const mealType = mealSel === MEAL_OTHER ? (get('mealTypeCustom') || 'אוכל רגיל') : mealSel;
+  const seatSel = get('seatClass');
+  const seatClass = seatSel === SEAT_OTHER ? (get('seatClassCustom') || 'מקום רגיל') : seatSel;
+  const status = get('status')||'interested';
+  const data = {
+    firstHe:get('firstHe'), lastHe:get('lastHe'), firstEn:get('firstEn'), lastEn:get('lastEn'),
+    dob:get('dob'), phone:get('phone'), email:get('email'), passportNo:get('passportNo'), passportExp:get('passportExp'),
+    status, reminderDate: status==='notInterested' ? '' : get('reminderDate'), notes:get('notes'), mealType, seatClass
+  };
+  if(!data.firstHe && !data.lastHe){ alert('נא להזין לפחות שם פרטי או שם משפחה בעברית'); return; }
+  const dupes = findDuplicateCustomers(data, id);
+  if(dupes.length){
+    const list = dupes.map(c=>`• ${customerName(c)}${c.phone?' - טלפון: '+c.phone:''}`).join('\n');
+    const proceed = confirm(`⚠ נמצא/ו לקוח/ות דומה/ים לפי שם ו/או טלפון:\n\n${list}\n\nהאם בכל זאת להמשיך ולשמור כלקוח נפרד?`);
+    if(!proceed) return;
+  }
+  if(id){
+    const c = state.customers.find(x=>x.id===id);
+    Object.assign(c, data);
+  }else{
+    state.customers.push({ id:uid(), ...data });
+  }
+  await saveList('customers', state.customers);
+  closeModal(); render();
+}
+
+async function removeCustomerFromTrip(id){
+  const c = state.customers.find(x=>x.id===id);
+  if(!c) return;
+  if(!confirm(`להסיר את ${customerName(c)} מהקבוצה ומשיבוץ החדרים? הלקוח יישאר שמור במאגר הלקוחות לפניה עתידית.`)) return;
+  state.groups.forEach(g=> g.customerIds = g.customerIds.filter(cid=>cid!==id));
+  state.rooms.forEach(r=> r.customerIds = r.customerIds.filter(cid=>cid!==id));
+  await Promise.all([saveList('groups',state.groups), saveList('rooms',state.rooms)]);
+  render();
+}
+
+/* ================= GROUPS ================= */
+function viewGroups(){
+  let cards = state.groups.map(g=>{
+    const members = g.customerIds.map(id=>state.customers.find(c=>c.id===id)).filter(Boolean);
+    const open = ui.openGroupId===g.id;
+    return `
+    <div class="group-card ${open?'open':''}">
+      <div class="title-row" onclick="toggleGroup('${g.id}')" style="cursor:pointer;">
+        <div>
+          <h3>${esc(g.name)}</h3>
+          <div class="meta"><span>📍 ${esc(g.destination||'—')}</span><span>🗓 ${esc(g.date||'—')}</span><span>👥 ${members.length} משתתפים</span><span>💰 מחיר טיול: ${g.price?(currencySymbol(g.priceCurrency)+fmtMoney(g.price)):'לא הוגדר'}</span></div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="icon-btn" onclick="event.stopPropagation(); openGroupModal('${g.id}')" title="עריכה">✎</button>
+          <button class="icon-btn del" onclick="event.stopPropagation(); deleteGroup('${g.id}')" title="מחיקה">✕</button>
+        </div>
+      </div>
+      ${open ? `
+      <div class="member-list">
+        <div class="checkbox-grid">
+          ${state.customers.length ? state.customers.map(c=>`
+            <label>
+              <input type="checkbox" ${g.customerIds.includes(c.id)?'checked':''} onchange="toggleGroupMember('${g.id}','${c.id}', this.checked)">
+              ${esc(customerName(c))}
+            </label>`).join('') : '<span style="color:var(--ink-soft); font-size:13px;">אין עדיין לקוחות במערכת</span>'}
+        </div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+  if(!state.groups.length) cards = `<div class="empty"><div class="stamp">אין עדיין קבוצות. צרו קבוצה ראשונה ליעד מסוים</div></div>`;
+  return `
+  <div class="card">
+    <div class="section-head">
+      <h2>קבוצות נסיעה</h2>
+      <button class="btn gold" onclick="openGroupModal()">+ קבוצה חדשה</button>
+    </div>
+    ${cards}
+  </div>
+  <div id="modal-root"></div>`;
+}
+function toggleGroup(id){ ui.openGroupId = ui.openGroupId===id ? null : id; render(); }
+async function toggleGroupMember(gid, cid, checked){
+  const g = state.groups.find(x=>x.id===gid);
+  if(checked){
+    if(!g.customerIds.includes(cid)) g.customerIds.push(cid);
+    // שיוך לקוח לטיול -> מילוי אוטומטי של הסכום הנדרש לפי מחיר הטיול,
+    // רק אם הלקוח לא עודכן ידנית בעבר (ר' applyGroupPriceToCustomer)
+    applyGroupPriceToCustomer(g, cid);
+  }
+  else{
+    g.customerIds = g.customerIds.filter(id=>id!==cid);
+    // הסרת לקוח מהקבוצה -> איפוס הסכום הנדרש, רק אם הוא הוזן אוטומטית
+    // (אם הוזן ידנית, מכבדים את העדכון הידני ולא נוגעים בו)
+    clearGroupPriceFromCustomer(cid);
+  }
+  await saveList('groups', state.groups);
+  await saveList('payments', state.payments);
+  render();
+}
+// ממלא את "הסכום הנדרש" של לקוח לפי מחיר הטיול המשויך אליו,
+// אלא אם הסכום כבר עודכן ידנית עבור אותו לקוח (p.requiredManual === true)
+function applyGroupPriceToCustomer(g, cid){
+  if(!g || !g.price) return;
+  const p = getPayment(cid);
+  if(p.requiredManual) return; // כיבוד עדכון ידני קודם - לא דורסים אותו
+  const h = findHouseholdOf(cid);
+  const multiplier = h ? h.customerIds.length : 1; // מחיר הטיול הוא לאדם - בתא משפחתי מכפילים לפי מספר הנוסעים
+  p.required = (Number(g.price)||0) * multiplier;
+  p.currency = g.priceCurrency==='USD' ? 'USD' : 'ILS';
+}
+// מאפס את הסכום הנדרש של לקוח שהוסר מהקבוצה, רק אם הוא לא עודכן ידנית
+function clearGroupPriceFromCustomer(cid){
+  const p = getPayment(cid);
+  if(p.requiredManual) return; // עודכן ידנית - לא נוגעים בו
+  p.required = 0;
+}
+function openGroupModal(id){
+  const g = id ? state.groups.find(x=>x.id===id) : null;
+  const v = g || {};
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal">
+      <div class="modal-head"><h3>${g?'עריכת קבוצה':'קבוצה חדשה'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <div class="field-grid">
+          <div class="field full"><label>שם הקבוצה</label><input id="g-name" value="${esc(v.name)}" placeholder="לדוגמה: טיול גמלאים – יוון"></div>
+          <div class="field"><label>יעד</label><input id="g-dest" value="${esc(v.destination)}"></div>
+          <div class="field"><label>תאריך יציאה</label><input type="date" id="g-date" value="${esc(v.date)}"></div>
+          <div class="field">
+            <label>מחיר הטיול לנוסע</label>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <input type="text" inputmode="decimal" id="g-price" style="flex:1;" value="${v.price||0}" onfocus="this.select()">
+              <select id="g-priceCurrency" style="width:64px;">
+                <option value="ILS" ${v.priceCurrency!=='USD'?'selected':''}>₪</option>
+                <option value="USD" ${v.priceCurrency==='USD'?'selected':''}>$</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <p style="font-size:12px; color:var(--ink-soft); margin:10px 2px 0;">מחיר זה יוזן אוטומטית כ"סכום נדרש לתשלום" לכל לקוח שמשויך (או ישויך) לקבוצה, אלא אם עודכן ידנית עבור לקוח מסוים בלשונית תשלומים.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn gold" onclick="saveGroup('${g?g.id:''}')">${g?'שמירת שינויים':'יצירת קבוצה'}</button>
+        <button class="btn ghost" onclick="closeModal()">ביטול</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function saveGroup(id){
+  const name = document.getElementById('g-name').value.trim();
+  const destination = document.getElementById('g-dest').value.trim();
+  const date = document.getElementById('g-date').value;
+  const price = parseAmount(document.getElementById('g-price').value);
+  const priceCurrency = document.getElementById('g-priceCurrency').value==='USD' ? 'USD' : 'ILS';
+  if(!name){ alert('נא להזין שם לקבוצה'); return; }
+  let g;
+  if(id){
+    g = state.groups.find(x=>x.id===id);
+    Object.assign(g, {name, destination, date, price, priceCurrency});
+  }else{
+    g = { id:uid(), name, destination, date, price, priceCurrency, customerIds:[] };
+    state.groups.push(g);
+  }
+  // סנכרון הסכום הנדרש לכל המשתתפים הקיימים בקבוצה שלא עודכנו ידנית
+  g.customerIds.forEach(cid=>applyGroupPriceToCustomer(g, cid));
+  await Promise.all([saveList('groups', state.groups), saveList('payments', state.payments)]);
+  closeModal(); render();
+}
+async function deleteGroup(id){
+  if(!confirm('למחוק את הקבוצה? החדרים המשויכים אליה יימחקו גם הם.')) return;
+  const g = state.groups.find(x=>x.id===id);
+  if(g) g.customerIds.forEach(cid=>clearGroupPriceFromCustomer(cid));
+  state.groups = state.groups.filter(g=>g.id!==id);
+  state.rooms = state.rooms.filter(r=>r.groupId!==id);
+  if(ui.selectedGroupRooms===id) ui.selectedGroupRooms=null;
+  if(ui.openGroupId===id) ui.openGroupId=null;
+  await Promise.all([saveList('groups',state.groups), saveList('rooms',state.rooms), saveList('payments', state.payments)]);
+  render();
+}
+
+/* ================= ROOMS ================= */
+const PAYMENT_METHODS = { bank:'העברה בנקאית', check:'צ׳ק', credit:'כרטיס אשראי', cash:'מזומן' };
+
+function viewRooms(){
+  if(!state.groups.length){
+    return `<div class="card"><div class="empty"><div class="stamp">יש ליצור קודם קבוצה בלשונית "קבוצות" כדי לשבץ חדרים</div></div></div>`;
+  }
+  if(!ui.selectedGroupRooms) ui.selectedGroupRooms = state.groups[0].id;
+  const group = state.groups.find(g=>g.id===ui.selectedGroupRooms) || state.groups[0];
+  const groupRooms = state.rooms.filter(r=>r.groupId===group.id);
+  const members = group.customerIds.map(id=>state.customers.find(c=>c.id===id)).filter(Boolean);
+  const assignedIds = new Set();
+  groupRooms.forEach(r=>r.customerIds.forEach(id=>assignedIds.add(id)));
+  const unassigned = members.filter(c=>!assignedIds.has(c.id));
+
+  const counts = {single:0,double:0,twin:0,triple:0};
+  let totalGuests = 0;
+  groupRooms.forEach(r=>{ counts[r.type]++; totalGuests += r.customerIds.length; });
+
+  // סיכום כללי - כל הקבוצות ביחד (מה שצריך להזמין מהמלון בסך הכל)
+  const overallCounts = {single:0,double:0,twin:0,triple:0};
+  let overallGuests = 0;
+  state.rooms.forEach(r=>{ overallCounts[r.type]++; overallGuests += r.customerIds.length; });
+  const overallSummaryHtml = `
+  <div class="card">
+    <h2>סיכום כולל לכל הקבוצות — מה להזמין מהמלון</h2>
+    <div class="stats">
+      ${Object.keys(ROOM_TYPES).map(t=>`<div class="stat"><div class="label">${ROOM_TYPES[t].label}</div><div class="value">${overallCounts[t]}</div></div>`).join('')}
+      <div class="stat gold"><div class="label">סה״כ חדרים להזמנה</div><div class="value">${state.rooms.length}</div></div>
+      <div class="stat gold"><div class="label">סה״כ אורחים במלון</div><div class="value">${overallGuests}</div></div>
+    </div>
+  </div>`;
+
+  const summaryHtml = `
+    <div class="stats">
+      ${Object.keys(ROOM_TYPES).map(t=>`<div class="stat"><div class="label">${ROOM_TYPES[t].label}</div><div class="value">${counts[t]}</div></div>`).join('')}
+      <div class="stat gold"><div class="label">סה״כ חדרים / אורחים</div><div class="value">${groupRooms.length} / ${totalGuests}</div></div>
+    </div>`;
+
+  const roomsHtml = groupRooms.length ? groupRooms.map(r=>{
+    const guestRows = r.customerIds.map(id=>{
+      const c = state.customers.find(x=>x.id===id);
+      if(!c) return '';
+      return `
+      <tr>
+        <td>${esc(customerName(c))}</td>
+        <td class="ltr" style="font-size:12.5px">${esc(c.firstEn||'')} ${esc(c.lastEn||'')}</td>
+        <td>
+          <button class="btn ghost small" onclick="openMoveGuestModal('${c.id}','${r.id}')">↔ העברת חדר</button>
+        </td>
+      </tr>`;
+    }).join('');
+    return `
+    <div class="room-block">
+      <div class="head">
+        <b>${ROOM_TYPES[r.type].label} <span class="mono" style="font-size:12px;color:var(--ink-soft)">(תפוסה ${r.customerIds.length}/${ROOM_TYPES[r.type].cap})</span></b>
+        <button class="icon-btn del" onclick="deleteRoom('${r.id}')" title="מחיקת חדר">✕</button>
+      </div>
+      <table style="margin-top:10px;">
+        <thead><tr><th>שם (עברית)</th><th>שם (אנגלית)</th><th></th></tr></thead>
+        <tbody>${guestRows || `<tr><td colspan="3" style="color:var(--ink-soft); font-size:13px;">— ללא אורחים —</td></tr>`}</tbody>
+      </table>
+      <div class="field" style="margin-top:10px;">
+        <label>הערות לחדר עבור המלון — יש לכתוב באנגלית בלבד</label>
+        <input class="ltr" dir="ltr" value="${esc(r.notes||'')}" placeholder="e.g. high floor, sea view, twin beds..." onchange="updateRoomNotes('${r.id}', this.value)">
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="stamp">עדיין לא נוצרו חדרים לקבוצה זו</div></div>`;
+
+  return `
+  ${overallSummaryHtml}
+  <div class="card">
+    <div class="section-head">
+      <h2>שיבוץ חדרים</h2>
+      <select class="group-select" onchange="ui.selectedGroupRooms=this.value; render();">
+        ${state.groups.map(g=>`<option value="${g.id}" ${g.id===group.id?'selected':''}>${esc(g.name)}</option>`).join('')}
+      </select>
+    </div>
+    ${summaryHtml}
+    ${roomsHtml}
+  </div>
+
+  <div class="card">
+    <h2>הוספת חדר חדש</h2>
+    ${unassigned.length===0 ? `<p style="color:var(--ink-soft); font-size:13.5px;">כל חברי הקבוצה כבר שובצו לחדר. ניתן להוסיף חברים נוספים לקבוצה בלשונית "קבוצות".</p>` : `
+    <div class="field" style="max-width:220px; margin-bottom:12px;">
+      <label>סוג חדר</label>
+      <select class="room-type-select" id="new-room-type">
+        ${Object.keys(ROOM_TYPES).map(t=>`<option value="${t}">${ROOM_TYPES[t].label} (עד ${ROOM_TYPES[t].cap})</option>`).join('')}
+      </select>
+    </div>
+    <label style="font-size:12px; color:var(--ink-soft); font-weight:500;">בחרו אורחים לא משובצים</label>
+    <div class="checkbox-grid" id="new-room-guests">
+      ${unassigned.map(c=>{
+        const partners = householdPartners(c.id).filter(m=>unassigned.some(u=>u.id===m.id));
+        const badge = partners.length ? ` <span class="pill neutral" style="font-size:10.5px; padding:1px 6px;" title="מקושר/ת לתא משפחתי עם ${esc(partners.map(m=>customerName(m)).join(', '))}">👪 זוג</span>` : '';
+        return `<label><input type="checkbox" value="${c.id}" onchange="onRoomGuestCheckboxChange(this)"> ${esc(customerName(c))} <span class="ltr mono" style="font-size:11.5px;color:var(--ink-soft)">(${esc(c.firstEn||'')} ${esc(c.lastEn||'')})</span>${badge}</label>`;
+      }).join('')}
+    </div>
+    <p style="font-size:11.5px; color:var(--ink-soft); margin-top:6px;">💡 סימון אורח שמקושר לתא משפחתי מסמן אוטומטית גם את בן/בת הזוג — בחרו סוג חדר "דאבל" או "טווין" כדי לשבץ אותם יחד.</p>
+    <div style="margin-top:14px;"><button class="btn gold" onclick="createRoom('${group.id}')">+ יצירת חדר</button></div>
+    `}
+  </div>
+  <div id="modal-root"></div>`;
+}
+function onRoomGuestCheckboxChange(checkbox){
+  if(!checkbox.checked) return;
+  const partners = householdPartners(checkbox.value);
+  if(!partners.length) return;
+  partners.forEach(m=>{
+    const partnerBox = document.querySelector(`#new-room-guests input[value="${m.id}"]`);
+    if(partnerBox && !partnerBox.checked) partnerBox.checked = true;
+  });
+}
+
+async function updateRoomNotes(roomId, notes){
+  const r = state.rooms.find(x=>x.id===roomId);
+  if(r){ r.notes = notes; await saveList('rooms', state.rooms); }
+}
+
+function openMoveGuestModal(customerId, fromRoomId){
+  const fromRoom = state.rooms.find(r=>r.id===fromRoomId);
+  const groupId = fromRoom.groupId;
+  const c = state.customers.find(x=>x.id===customerId);
+  const otherRooms = state.rooms.filter(r=>r.groupId===groupId && r.id!==fromRoomId);
+  const options = otherRooms.map(r=>{
+    const vacancy = ROOM_TYPES[r.type].cap - r.customerIds.length;
+    const disabled = vacancy<=0 ? 'disabled' : '';
+    return `<option value="${r.id}" ${disabled}>${ROOM_TYPES[r.type].label} — מקום פנוי: ${Math.max(vacancy,0)} ${disabled?'(מלא)':''}</option>`;
+  }).join('');
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal">
+      <div class="modal-head"><h3>העברת ${esc(customerName(c))} לחדר אחר</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <div class="field">
+          <label>העברה לחדר קיים</label>
+          <select id="move-target-room" ${otherRooms.length?'':'disabled'}>
+            <option value="">— בחרו חדר —</option>
+            ${options}
+          </select>
+        </div>
+        <p style="font-size:12.5px; color:var(--ink-soft); margin:14px 0 6px;">או ליצור עבורו חדר חדש:</p>
+        <div class="field-grid">
+          <div class="field"><label>סוג חדר חדש</label>
+            <select id="move-new-room-type">${Object.keys(ROOM_TYPES).map(t=>`<option value="${t}">${ROOM_TYPES[t].label} (עד ${ROOM_TYPES[t].cap})</option>`).join('')}</select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn gold" onclick="moveGuestToExisting('${customerId}','${fromRoomId}')">העברה לחדר שנבחר</button>
+        <button class="btn ghost" onclick="moveGuestToNewRoom('${customerId}','${fromRoomId}','${groupId}')">יצירת חדר חדש והעברה</button>
+        <button class="btn ghost" onclick="closeModal()">ביטול</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function moveGuestToExisting(customerId, fromRoomId){
+  const targetId = document.getElementById('move-target-room').value;
+  if(!targetId){ alert('נא לבחור חדר יעד'); return; }
+  const target = state.rooms.find(r=>r.id===targetId);
+  if(target.customerIds.length >= ROOM_TYPES[target.type].cap){ alert('החדר הנבחר מלא'); return; }
+  await performMove(customerId, fromRoomId, targetId);
+}
+async function moveGuestToNewRoom(customerId, fromRoomId, groupId){
+  const type = document.getElementById('move-new-room-type').value;
+  const newRoom = { id:uid(), groupId, type, customerIds:[], notes:'' };
+  state.rooms.push(newRoom);
+  await performMove(customerId, fromRoomId, newRoom.id);
+}
+async function performMove(customerId, fromRoomId, toRoomId){
+  const fromRoom = state.rooms.find(r=>r.id===fromRoomId);
+  fromRoom.customerIds = fromRoom.customerIds.filter(id=>id!==customerId);
+  const toRoom = state.rooms.find(r=>r.id===toRoomId);
+  if(!toRoom.customerIds.includes(customerId)) toRoom.customerIds.push(customerId);
+  if(fromRoom.customerIds.length===0){
+    state.rooms = state.rooms.filter(r=>r.id!==fromRoomId);
+  }
+  await saveList('rooms', state.rooms);
+  closeModal(); render();
+}
+
+async function createRoom(groupId){
+  const type = document.getElementById('new-room-type').value;
+  const checked = Array.from(document.querySelectorAll('#new-room-guests input:checked')).map(i=>i.value);
+  if(checked.length===0){ alert('נא לבחור לפחות אורח אחד לחדר'); return; }
+  if(checked.length > ROOM_TYPES[type].cap){ alert(`חדר מסוג ${ROOM_TYPES[type].label} מכיל עד ${ROOM_TYPES[type].cap} אורחים`); return; }
+  state.rooms.push({ id:uid(), groupId, type, customerIds:checked, notes:'' });
+  await saveList('rooms', state.rooms);
+  render();
+}
+async function deleteRoom(id){
+  if(!confirm('למחוק את החדר?')) return;
+  state.rooms = state.rooms.filter(r=>r.id!==id);
+  await saveList('rooms', state.rooms);
+  render();
+}
+
+/* ================= PAYMENTS ================= */
+function findGroupOf(customerId){
+  return state.groups.find(g=>g.customerIds.includes(customerId));
+}
+function findRoomOf(customerId){
+  return state.rooms.find(r=>r.customerIds.includes(customerId));
+}
+
+/* ---------------- תאים משפחתיים (זוגות) ----------------
+   שני לקוחות שמקושרים כזוג נשארים כרשומות נפרדות עם כל הפרטים האישיים שלהם
+   (דרכון, תאריך לידה, אוכל וכו'), אך חולקים רשומת תשלום אחת. שיבוץ לחדר זוגי
+   נעשה כרגיל דרך מסך החדרים - פשוט משבצים את שני בני הזוג לאותו חדר. */
+function findHouseholdOf(customerId){
+  return state.households.find(h=>h.customerIds.includes(customerId));
+}
+function householdPartners(customerId){
+  const h = findHouseholdOf(customerId);
+  if(!h) return [];
+  return h.customerIds.filter(id=>id!==customerId).map(id=>state.customers.find(c=>c.id===id)).filter(Boolean);
+}
+async function linkAsCouple(id1, id2){
+  if(!id1 || !id2 || id1===id2) return;
+  if(findHouseholdOf(id1) || findHouseholdOf(id2)){ alert('אחד מהלקוחות כבר משויך לתא משפחתי אחר. יש לנתק קודם.'); return; }
+  const p1 = getPayment(id1), p2 = getPayment(id2);
+  // ממזגים תשלומים קיימים (אם היו) לרשומת התשלום המשותפת החדשה, כדי לא לאבד נתונים שכבר הוזנו
+  const mergedPayments = [...(p1.payments||[]), ...(p2.payments||[])];
+  const mergedDeposit = (Number(p1.deposit)||0) + (Number(p2.deposit)||0);
+  // אם שני הסכומים הקודמים היו "אוטומטיים ממחיר הטיול" (לא עודכנו ידנית) - נשמור על כך
+  // גם אחרי הקישור, כדי שהסכום ימשיך להתעדכן אוטומטית (מחיר לאדם × 2 נוסעים).
+  const bothAutoFromTrip = !p1.requiredManual && !p2.requiredManual;
+  const h = { id:uid(), customerIds:[id1,id2] };
+  const g1 = findGroupOf(id1);
+  let required, requiredManual, currency;
+  if(bothAutoFromTrip && g1 && g1.price){
+    required = (Number(g1.price)||0) * h.customerIds.length;
+    requiredManual = false;
+    currency = g1.priceCurrency==='USD' ? 'USD' : 'ILS';
+  }else{
+    required = (Number(p1.required)||0) + (Number(p2.required)||0);
+    requiredManual = true;
+    currency = p1.currency||'ILS';
+  }
+  state.payments = state.payments.filter(p=>p.customerId!==id1 && p.customerId!==id2);
+  state.households.push(h);
+  state.payments.push({ id:uid(), householdId:h.id, required, deposit:mergedDeposit, currency, requiredManual, payments:mergedPayments });
+  await Promise.all([saveList('households', state.households), saveList('payments', state.payments)]);
+  render();
+}
+async function unlinkHousehold(customerId){
+  const h = findHouseholdOf(customerId);
+  if(!h) return;
+  if(!confirm('לנתק את תא המשפחתי? התשלום המשותף יומר לתשלום נפרד לכל אחד מבני הזוג (הסכומים יתחלקו שווה בשווה).')) return;
+  const p = state.payments.find(x=>x.householdId===h.id);
+  state.households = state.households.filter(x=>x.id!==h.id);
+  if(p){
+    state.payments = state.payments.filter(x=>x.id!==p.id);
+    const n = h.customerIds.length || 1;
+    h.customerIds.forEach(cid=>{
+      state.payments.push({
+        id:uid(), customerId:cid,
+        required: (Number(p.required)||0)/n, deposit:(Number(p.deposit)||0)/n,
+        currency:p.currency||'ILS', requiredManual:p.requiredManual||false, payments:[]
+      });
+    });
+  }
+  await Promise.all([saveList('households', state.households), saveList('payments', state.payments)]);
+  render();
+}
+function openLinkCoupleModal(customerId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  const candidates = state.customers.filter(x=>x.id!==customerId && !findHouseholdOf(x.id));
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-head"><h3>קישור תא משפחתי ל-${esc(customerName(c))}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <div class="field">
+          <label>בחירת בן/בת זוג</label>
+          <select id="couple-partner-select">
+            <option value="">— בחרו לקוח —</option>
+            ${candidates.map(x=>`<option value="${x.id}">${esc(customerName(x))}</option>`).join('')}
+          </select>
+        </div>
+        <p style="font-size:12.5px; color:var(--ink-soft); line-height:1.5; margin-top:8px;">
+          שני בני הזוג יישארו כרשומות נפרדות עם כל הפרטים האישיים (דרכון, אוכל, מקום וכו'), אך יחלקו רשומת תשלום אחת במסך התשלומים.
+          שיבוץ לחדר זוגי נעשה כרגיל במסך "חדרים".
+        </p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" onclick="closeModal()">ביטול</button>
+        <button class="btn gold" onclick="const v=document.getElementById('couple-partner-select').value; if(!v){alert('נא לבחור בן/בת זוג'); return;} linkAsCouple('${customerId}', v); closeModal();">קישור כזוג</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// בדיקת תוקף דרכון מול תאריך הטיסה: תקן מקובל הוא לפחות 6 חודשים תוקף מזמן הטיסה
+function passportValidityCheck(c){
+  const g = findGroupOf(c.id);
+  if(!g || !g.date || !c.passportExp) return {status:'unknown'};
+  const flight = new Date(g.date);
+  const exp = new Date(c.passportExp);
+  if(isNaN(flight.getTime()) || isNaN(exp.getTime())) return {status:'unknown'};
+  const diffDays = Math.floor((exp - flight) / (1000*60*60*24));
+  const months = diffDays / 30.44;
+  return { status: months >= 6 ? 'ok' : 'warn', months, groupName: g.name, flightDate: g.date };
+}
+function passportCheckLabel(chk){
+  if(chk.status==='unknown') return '—';
+  if(chk.status==='ok') return `תקין (${Math.floor(chk.months)}+ חודשים בזמן הטיסה)`;
+  if(chk.months < 0) return 'הדרכון פג תוקף לפני מועד הטיסה!';
+  return `⚠ רק ${chk.months.toFixed(1)} חודשי תוקף בזמן הטיסה`;
+}
+function goToGroup(groupId){
+  ui.tab = 'groups';
+  ui.openGroupId = groupId;
+  render();
+}
+function goToRoomsFor(groupId){
+  ui.tab = 'rooms';
+  ui.selectedGroupRooms = groupId;
+  render();
+}
+function getPayment(customerId){
+  const h = findHouseholdOf(customerId);
+  let p;
+  if(h){
+    p = state.payments.find(p=>p.householdId===h.id);
+    if(!p){ p = { id:uid(), householdId:h.id, required:0, deposit:0, currency:'ILS', payments:[] }; state.payments.push(p); }
+  } else {
+    p = state.payments.find(p=>p.customerId===customerId);
+    if(!p){ p = { id:uid(), customerId, required:0, deposit:0, currency:'ILS', payments:[] }; state.payments.push(p); }
+  }
+  if(!p.currency) p.currency = 'ILS';
+  if(p.deposit===undefined || p.deposit===null) p.deposit = 0;
+  if(p.requiredManual===undefined || p.requiredManual===null) p.requiredManual = false;
+  if(!Array.isArray(p.payments)){
+    p.payments = (Number(p.paid)>0) ? [{date:'', amount:Number(p.paid)||0, method:'', reference:''}] : [];
+  }
+  p.payments.forEach(pay=>{ if(pay.reference===undefined) pay.reference=''; });
+  return p;
+}
+function currencySymbol(cur){ return cur==='USD' ? '$' : '₪'; }
+function paidTotal(p){
+  return p.payments.reduce((sum,x)=>sum+(Number(x.amount)||0), 0);
+}
+function billingUnits(customers){
+  const seen = new Set();
+  const units = [];
+  customers.forEach(c=>{
+    if(seen.has(c.id)) return;
+    const h = findHouseholdOf(c.id);
+    if(h){
+      const members = h.customerIds.map(id=>state.customers.find(x=>x.id===id)).filter(Boolean);
+      members.forEach(m=>seen.add(m.id));
+      units.push({ type:'household', id:h.id, repId:members[0].id, members });
+    }else{
+      seen.add(c.id);
+      units.push({ type:'customer', id:c.id, repId:c.id, members:[c] });
+    }
+  });
+  return units;
+}
+function viewPayments(){
+  let customers = state.customers;
+  if(ui.paymentsFilter!=='all'){
+    customers = customers.filter(c=>{ const g=findGroupOf(c.id); return g && g.id===ui.paymentsFilter; });
+  }
+  const units = billingUnits(customers);
+  let totalReqILS=0, totalPaidILS=0, totalReqUSD=0, totalPaidUSD=0;
+  const rows = units.map(u=>{
+    const repId = u.repId;
+    const p = getPayment(repId);
+    const paid = paidTotal(p);
+    if(p.currency==='USD'){ totalReqUSD += Number(p.required)||0; totalPaidUSD += paid; }
+    else { totalReqILS += Number(p.required)||0; totalPaidILS += paid; }
+    const balance = (Number(p.required)||0) - paid;
+    const g = findGroupOf(repId);
+    const unitLabel = u.type==='household'
+      ? `${u.members.map(m=>customerName(m)).join(' + ')} <span class="pill neutral" title="תא משפחתי - תשלום משותף" style="margin-inline-start:4px;">👪 זוג</span> <button class="icon-btn" style="font-size:11px;" onclick="unlinkHousehold('${repId}')" title="ניתוק התא המשפחתי">🔓</button>`
+      : `${esc(customerName(u.members[0]))} <button class="icon-btn" style="font-size:11px;" onclick="openLinkCoupleModal('${repId}')" title="קישור לבן/בת זוג לתשלום משותף">🔗</button>`;
+    let pill;
+    if((Number(p.required)||0) === 0 && paid === 0){
+      pill = `<span class="pill neutral">לא הוזן סכום</span>`;
+    } else if(balance<=0){
+      pill = `<span class="pill ok">שולם</span>`;
+    } else {
+      pill = `<span class="pill warn">חוב ${currencySymbol(p.currency)}${fmtMoney(balance)}</span>`;
+    }
+    const open = ui.openPaymentsCustomerId === repId;
+    const paymentRows = p.payments.map((pay,idx)=>`
+      <tr>
+        <td class="mono" style="font-size:12.5px; color:var(--ink-soft);">תשלום ${idx+1}</td>
+        <td><input type="date" value="${esc(pay.date||'')}" onchange="updatePaymentLine('${repId}',${idx},'date',this.value)"></td>
+        <td><input type="text" inputmode="decimal" class="amount-input mono" value="${pay.amount||0}" onfocus="this.select()" onchange="updatePaymentLine('${repId}',${idx},'amount',this.value)"></td>
+        <td>
+          <select onchange="updatePaymentLine('${repId}',${idx},'method',this.value)">
+            <option value="">— בחרו —</option>
+            ${Object.keys(PAYMENT_METHODS).map(m=>`<option value="${m}" ${pay.method===m?'selected':''}>${PAYMENT_METHODS[m]}</option>`).join('')}
+          </select>
+        </td>
+        <td><input type="text" class="mono" style="width:110px;" placeholder="מס' אסמכתא" value="${esc(pay.reference||'')}" onchange="updatePaymentLine('${repId}',${idx},'reference',this.value)"></td>
+        <td><button class="icon-btn del" onclick="removePaymentLine('${repId}',${idx})" title="הסרת תשלום">✕</button></td>
+      </tr>`).join('');
+    return `
+    <tr>
+      <td><b>${unitLabel}</b></td>
+      <td style="font-size:12.5px; color:var(--ink-soft);">${esc(g?g.name:'—')}</td>
+      <td>
+        <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
+          <input type="text" inputmode="decimal" class="amount-input mono" style="width:90px;" value="${p.required||0}" onfocus="this.select()" onchange="updateRequired('${repId}',this.value)">
+          <select onchange="updateRequiredCurrency('${repId}',this.value)" style="width:60px;">
+            <option value="ILS" ${p.currency!=='USD'?'selected':''}>₪</option>
+            <option value="USD" ${p.currency==='USD'?'selected':''}>$</option>
+          </select>
+        </div>
+        ${g && g.price ? (p.requiredManual
+            ? `<div style="margin-top:4px;"><span class="pill neutral" title="הסכום עודכן ידנית ולא יושפע ממחיר הטיול">עודכן ידנית</span> <button class="btn ghost small" style="padding:2px 6px; font-size:11px;" onclick="resetRequiredToTripPrice('${repId}')" title="חזרה למחיר הטיול (${currencySymbol(g.priceCurrency)}${fmtMoney(g.price)}${u.members.length>1?' × '+u.members.length+' נוסעים':''})">↺ איפוס למחיר הטיול</button></div>`
+            : `<div style="margin-top:4px;"><span class="pill gold" title="הסכום מתעדכן אוטומטית לפי מחיר הטיול${u.members.length>1?' × '+u.members.length+' נוסעים':''}">אוטומטי מהטיול${u.members.length>1?' (× '+u.members.length+')':''}</span></div>`
+          ) : ''}
+      </td>
+      <td>
+        <input type="text" inputmode="decimal" class="amount-input mono" style="width:90px;" value="${p.deposit||0}" onfocus="this.select()" onchange="updateDeposit('${repId}',this.value)" title="סכום שנחשב כמקדמה">
+      </td>
+      <td class="mono">${currencySymbol(p.currency)}${fmtMoney(paid)}</td>
+      <td>${pill}</td>
+      <td><button class="btn ghost small" onclick="ui.openPaymentsCustomerId = ui.openPaymentsCustomerId==='${repId}' ? null : '${repId}'; render();">${open?'סגירה ▲':'פרטי תשלום ▼'}</button></td>
+    </tr>
+    ${open ? `
+    <tr>
+      <td colspan="7" style="background:var(--parchment); padding:14px 16px;">
+        <table>
+          <thead><tr><th></th><th>תאריך</th><th>סכום (${currencySymbol(p.currency)})</th><th>אמצעי תשלום</th><th>מס' אסמכתא</th><th></th></tr></thead>
+          <tbody>${paymentRows || `<tr><td colspan="6" style="color:var(--ink-soft); font-size:13px;">אין עדיין תשלומים רשומים</td></tr>`}</tbody>
+        </table>
+        ${p.payments.length < 3 ? `<button class="btn gold small" style="margin-top:10px;" onclick="addPaymentLine('${repId}')">+ הוספת תשלום</button>` : `<p style="font-size:12px;color:var(--ink-soft); margin-top:8px;">ניתן לרשום עד 3 תשלומים</p>`}
+      </td>
+    </tr>` : ''}`;
+  }).join('');
+  const rowsOut = units.length ? rows : `<tr><td colspan="7"><div class="empty"><div class="stamp">אין לקוחות להצגה</div></div></td></tr>`;
+  const pctILS = totalReqILS>0 ? Math.min(100, Math.round(totalPaidILS/totalReqILS*100)) : 0;
+  const pctUSD = totalReqUSD>0 ? Math.min(100, Math.round(totalPaidUSD/totalReqUSD*100)) : 0;
+
+  return `
+  <div class="card">
+    <h2>סיכום תשלומים</h2>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12.5px; color:var(--ink-soft); margin-bottom:6px;">בשקלים (₪)</div>
+      <div class="stats">
+        <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">₪${fmtMoney(totalReqILS)}</div></div>
+        <div class="stat"><div class="label">שולם בפועל</div><div class="value">₪${fmtMoney(totalPaidILS)}</div></div>
+        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">₪${fmtMoney(totalReqILS-totalPaidILS)}</div></div>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar" style="width:${pctILS}%"></div></div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctILS}% מהסכום הנדרש בשקלים שולם</div>
+    </div>
+    <div>
+      <div style="font-size:12.5px; color:var(--ink-soft); margin-bottom:6px;">בדולרים ($)</div>
+      <div class="stats">
+        <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">$${fmtMoney(totalReqUSD)}</div></div>
+        <div class="stat"><div class="label">שולם בפועל</div><div class="value">$${fmtMoney(totalPaidUSD)}</div></div>
+        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">$${fmtMoney(totalReqUSD-totalPaidUSD)}</div></div>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar" style="width:${pctUSD}%"></div></div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctUSD}% מהסכום הנדרש בדולרים שולם</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-head">
+      <h2>תשלומים לפי לקוח</h2>
+      <select class="group-select" onchange="ui.paymentsFilter=this.value; render();">
+        <option value="all" ${ui.paymentsFilter==='all'?'selected':''}>כל הקבוצות</option>
+        ${state.groups.map(g=>`<option value="${g.id}" ${ui.paymentsFilter===g.id?'selected':''}>${esc(g.name)}</option>`).join('')}
+      </select>
+    </div>
+    <table>
+      <thead><tr><th>לקוח</th><th>קבוצה</th><th>סכום נדרש</th><th>מקדמה</th><th>שולם</th><th>סטטוס</th><th></th></tr></thead>
+      <tbody>${rowsOut}</tbody>
+    </table>
+  </div>`;
+}
+async function updateRequired(customerId, value){
+  const p = getPayment(customerId);
+  p.required = parseAmount(value);
+  p.requiredManual = true; // עדכון ידני - לא יידרס יותר אוטומטית ממחיר הטיול
+  await saveList('payments', state.payments);
+  await autoUpdateCustomerStatus(customerId);
+  render();
+}
+async function resetRequiredToTripPrice(customerId){
+  const p = getPayment(customerId);
+  const g = findGroupOf(customerId);
+  if(!g || !g.price){ alert('לא הוגדר מחיר לטיול המשויך ללקוח זה'); return; }
+  const h = findHouseholdOf(customerId);
+  const multiplier = h ? h.customerIds.length : 1; // מחיר הטיול הוא לאדם - בתא משפחתי מכפילים לפי מספר הנוסעים
+  p.required = (Number(g.price)||0) * multiplier;
+  p.currency = g.priceCurrency==='USD' ? 'USD' : 'ILS';
+  p.requiredManual = false; // חוזרים למעקב אוטומטי אחר מחיר הטיול
+  await saveList('payments', state.payments);
+  await autoUpdateCustomerStatus(customerId);
+  render();
+}
+async function updateRequiredCurrency(customerId, value){
+  const p = getPayment(customerId);
+  p.currency = value==='USD' ? 'USD' : 'ILS';
+  await saveList('payments', state.payments);
+  await autoUpdateCustomerStatus(customerId);
+  render();
+}
+async function updateDeposit(customerId, value){
+  const p = getPayment(customerId);
+  p.deposit = parseAmount(value);
+  await saveList('payments', state.payments);
+  await autoUpdateCustomerStatus(customerId);
+  render();
+}
+async function addPaymentLine(customerId){
+  const p = getPayment(customerId);
+  if(p.payments.length>=3) return;
+  p.payments.push({date:'', amount:0, method:'', reference:''});
+  await saveList('payments', state.payments);
+  await autoUpdateCustomerStatus(customerId);
+  render();
+}
+async function removePaymentLine(customerId, idx){
+  const p = getPayment(customerId);
+  p.payments.splice(idx,1);
+  await saveList('payments', state.payments);
+  await autoUpdateCustomerStatus(customerId);
+  render();
+}
+async function updatePaymentLine(customerId, idx, field, value){
+  const p = getPayment(customerId);
+  if(!p.payments[idx]) return;
+  p.payments[idx][field] = field==='amount' ? parseAmount(value) : value;
+  await saveList('payments', state.payments);
+  await autoUpdateCustomerStatus(customerId);
+  render();
+}
+
+/* ---------------- עדכון סטטוס לקוח אוטומטי לפי תשלומים ----------------
+   נבדק בכל שינוי בנתוני התשלום: מקדמה ששולמה / תשלום חלקי / תשלום מלא,
+   ולפי זה מתעדכן סטטוס הלקוח בהתאם (מבלי לגעת בסטטוסים שלפני תשלום,
+   כמו 'מתעניין'/'נשלח מידע'/'נרשם', אלא אם אין יותר תשלומים בכלל). */
+function computeAutoPaymentStatus(customerId){
+  const p = getPayment(customerId);
+  const paid = paidTotal(p);
+  const required = Number(p.required)||0;
+  const deposit = Number(p.deposit)||0;
+  if(required>0 && paid>=required) return 'paidFull';
+  if(deposit>0 && paid>deposit) return 'paidPartial';
+  if(deposit>0 && paid>0) return 'paidDeposit';
+  if(deposit<=0 && paid>0) return 'paidPartial';
+  return null; // אין עדיין תשלום שמצדיק שינוי אוטומטי
+}
+async function autoUpdateCustomerStatus(customerId){
+  const h = findHouseholdOf(customerId);
+  const targetIds = h ? h.customerIds : [customerId];
+  const PAYMENT_STATUSES = ['paidDeposit','paidPartial','paidFull'];
+  let changed = false;
+  for(const cid of targetIds){
+    const c = state.customers.find(x=>x.id===cid);
+    if(!c) continue;
+    const p = getPayment(cid);
+    const paid = paidTotal(p);
+    let newStatus = computeAutoPaymentStatus(cid);
+    if(!newStatus && paid<=0 && PAYMENT_STATUSES.includes(c.status)){
+      newStatus = 'registered'; // כל התשלומים הוסרו — חוזרים לסטטוס שלפני תשלום
+    }
+    if(newStatus && c.status!==newStatus){ c.status = newStatus; changed = true; }
+  }
+  if(changed) await saveList('customers', state.customers);
+}
+
+/* ================= EXCEL EXPORT ================= */
+// Styles the header row(s) of a worksheet: bold, one size bigger than body text, yellow background
+function styleHeaderRow(ws, rowIndex){
+  rowIndex = rowIndex || 0;
+  if(!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let C = range.s.c; C <= range.e.c; C++){
+    const addr = XLSX.utils.encode_cell({r: rowIndex, c: C});
+    const cell = ws[addr];
+    if(!cell) continue;
+    cell.s = {
+      font: { bold: true, sz: 12 },
+      fill: { patternType: 'solid', fgColor: { rgb: 'FFFF00' }, bgColor: { rgb: 'FFFF00' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
+    };
+  }
+}
+
+// Adds a thin black border around every cell in the used range (fills gaps with blank cells so the grid is complete)
+function borderAllCells(ws){
+  if(!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const thin = { style: 'thin', color: { rgb: '000000' } };
+  for(let R = range.s.r; R <= range.e.r; R++){
+    for(let C = range.s.c; C <= range.e.c; C++){
+      const addr = XLSX.utils.encode_cell({r:R, c:C});
+      if(!ws[addr]) ws[addr] = { t:'s', v:'' };
+      ws[addr].s = Object.assign({}, ws[addr].s, { border: { top:thin, bottom:thin, left:thin, right:thin } });
+    }
+  }
+}
+
+function exportToExcel(){
+  if(typeof XLSX === 'undefined'){ alert('ספריית הייצוא לא נטענה. בדקו את חיבור האינטרנט ונסו שוב.'); return; }
+
+  const today = new Date().toISOString().slice(0,10);
+  const wb = XLSX.utils.book_new();
+
+  // לקוחות
+  const customersSheet = state.customers.map(c=>{
+    const chk = passportValidityCheck(c);
+    return {
+      'שם פרטי (עברית)': c.firstHe||'', 'שם משפחה (עברית)': c.lastHe||'',
+      'First Name': c.firstEn||'', 'Last Name': c.lastEn||'',
+      'תאריך לידה': fmtDateDMY(c.dob), 'טלפון': c.phone||'', 'מייל': c.email||'',
+      'מספר דרכון': c.passportNo||'', 'תוקף דרכון': fmtDateDMY(c.passportExp),
+      'בדיקת תוקף מול טיסה': passportCheckLabel(chk),
+      'סטטוס לקוח': (CUSTOMER_STATUSES[c.status]||CUSTOMER_STATUSES.interested).label,
+      'תזכורת ליצירת קשר': fmtDateDMY(c.reminderDate),
+      'אוכל בטיסה': c.mealType||'אוכל רגיל',
+      'מקום בטיסה': c.seatClass||'מקום רגיל',
+      'הערות': c.notes||''
+    };
+  });
+  const customersWs = XLSX.utils.json_to_sheet(customersSheet.length?customersSheet:[{'הערה':'אין נתונים'}]);
+  customersWs['!cols'] = [{wch:16},{wch:16},{wch:14},{wch:14},{wch:12},{wch:14},{wch:22},{wch:14},{wch:14},{wch:32},{wch:16},{wch:16},{wch:20},{wch:16},{wch:32}];
+  styleHeaderRow(customersWs, 0);
+  borderAllCells(customersWs);
+  XLSX.utils.book_append_sheet(wb, customersWs, 'לקוחות');
+
+  // קבוצות (כל משתתף בתא נפרד)
+  const maxParticipants = state.groups.reduce((m,g)=>Math.max(m, g.customerIds.length), 0);
+  const groupsSheet = state.groups.map(g=>{
+    const row = {
+      'שם קבוצה': g.name||'', 'יעד': g.destination||'', 'תאריך יציאה': fmtDateDMY(g.date),
+      'מספר משתתפים': g.customerIds.length
+    };
+    for(let i=0;i<maxParticipants;i++){
+      const cust = state.customers.find(c=>c.id===g.customerIds[i]);
+      row[`משתתף ${i+1}`] = cust ? customerName(cust) : '';
+    }
+    return row;
+  });
+  const groupsWs = XLSX.utils.json_to_sheet(groupsSheet.length?groupsSheet:[{'הערה':'אין נתונים'}]);
+  groupsWs['!cols'] = [{wch:18},{wch:16},{wch:14},{wch:14}, ...Array(maxParticipants).fill({wch:20})];
+  styleHeaderRow(groupsWs, 0);
+  borderAllCells(groupsWs);
+  XLSX.utils.book_append_sheet(wb, groupsWs, 'קבוצות');
+
+  // ROOM SUMMARY — quick overview for the hotel: how many rooms of each type, how many guests
+  const roomTypeOrder = ['single','double','twin','triple'];
+
+  function buildRoomSummaryWs(roomsList){
+    const counts = {single:0,double:0,twin:0,triple:0};
+    const guestsByType = {single:0,double:0,twin:0,triple:0};
+    roomsList.forEach(r=>{ counts[r.type]++; guestsByType[r.type]+=r.customerIds.length; });
+    const totalRooms = roomsList.length;
+    const totalGuests = roomTypeOrder.reduce((s,t)=>s+guestsByType[t],0);
+    const aoa = [
+      ['Hotel Room Requirement Summary'],
+      [],
+      ['Room Type', 'Rooms Needed', 'Guests'],
+      ...roomTypeOrder.filter(t=>counts[t]>0).map(t=>[ROOM_TYPES_EN[t], counts[t], guestsByType[t]]),
+      ['TOTAL', totalRooms, totalGuests]
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wch:18},{wch:16},{wch:12}];
+    ws['!merges'] = [{s:{r:0,c:0}, e:{r:0,c:2}}];
+    styleHeaderRow(ws, 2); // row 2 holds 'Room Type' / 'Rooms Needed' / 'Guests'
+    borderAllCells(ws);
+    return ws;
+  }
+
+  const summaryWs = buildRoomSummaryWs(state.rooms);
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Room Summary');
+
+  // Rooms (one row per room, each guest's first/last name in its own column — for the hotel; English only)
+  const maxRoomGuests = state.rooms.reduce((m,r)=>Math.max(m, r.customerIds.length), 0) || 1;
+  const guestCols = [];
+  for(let i=0;i<maxRoomGuests;i++){ guestCols.push({wch:16},{wch:16}); }
+
+  function buildRoomsSheetData(roomsList){
+    const roomCounter = {};
+    return roomsList.map(r=>{
+      const g = state.groups.find(x=>x.id===r.groupId);
+      const groupKey = g ? g.id : '_none';
+      roomCounter[groupKey] = (roomCounter[groupKey]||0) + 1;
+      const guests = r.customerIds.map(id=>state.customers.find(c=>c.id===id)).filter(Boolean);
+      const row = {
+        'Group': g?g.name:'',
+        'Room No.': roomCounter[groupKey],
+        'Room Type': ROOM_TYPES_EN[r.type],
+        'Guests in Room': guests.length
+      };
+      for(let i=0;i<maxRoomGuests;i++){
+        const c = guests[i];
+        row[`Guest ${i+1} First Name`] = c ? (c.firstEn||'') : '';
+        row[`Guest ${i+1} Last Name`] = c ? (c.lastEn||'') : '';
+      }
+      row['Notes'] = r.notes||'';
+      return row;
+    });
+  }
+
+  const roomsSheet = buildRoomsSheetData(state.rooms);
+  const roomsWs = XLSX.utils.json_to_sheet(roomsSheet.length?roomsSheet:[{'Note':'No data'}]);
+  roomsWs['!cols'] = [{wch:16},{wch:10},{wch:12},{wch:14}, ...guestCols, {wch:28}];
+  styleHeaderRow(roomsWs, 0);
+  borderAllCells(roomsWs);
+  XLSX.utils.book_append_sheet(wb, roomsWs, 'Rooms');
+
+  // תשלומים
+  const paymentsSheet = state.customers.map(c=>{
+    const p = getPayment(c.id);
+    const g = findGroupOf(c.id);
+    const paid = paidTotal(p);
+    const row = {
+      'לקוח': customerName(c), 'קבוצה': g?g.name:'',
+      'סכום נדרש': Number(p.required)||0,
+      'סכום מקדמה': Number(p.deposit)||0,
+      'מטבע': p.currency==='USD' ? 'USD' : 'ILS'
+    };
+    for(let i=0;i<3;i++){
+      const pay = p.payments[i];
+      row[`תשלום ${i+1} - תאריך`] = pay?fmtDateDMY(pay.date):'';
+      row[`תשלום ${i+1} - סכום`] = pay?(Number(pay.amount)||0):'';
+      row[`תשלום ${i+1} - אמצעי`] = pay&&pay.method?(PAYMENT_METHODS[pay.method]||''):'';
+      row[`תשלום ${i+1} - אסמכתא`] = pay?(pay.reference||''):'';
+    }
+    row['סה״כ שולם'] = paid;
+    row['יתרה'] = (Number(p.required)||0)-paid;
+    return row;
+  });
+  const paymentsWs = XLSX.utils.json_to_sheet(paymentsSheet.length?paymentsSheet:[{'הערה':'אין נתונים'}]);
+  paymentsWs['!cols'] = [{wch:18},{wch:16},{wch:12},{wch:12},{wch:9},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12}];
+  styleHeaderRow(paymentsWs, 0);
+  borderAllCells(paymentsWs);
+  XLSX.utils.book_append_sheet(wb, paymentsWs, 'תשלומים');
+
+  XLSX.writeFile(wb, `ג'ינג'ר-תיירות-${today}.xlsx`);
+
+  // Separate standalone Rooms file per group (e.g. to send to each hotel separately)
+  state.groups.forEach(g=>{
+    const groupRooms = state.rooms.filter(r=>r.groupId===g.id);
+    if(!groupRooms.length) return;
+    const gwb = XLSX.utils.book_new();
+
+    const gSummaryWs = buildRoomSummaryWs(groupRooms);
+    XLSX.utils.book_append_sheet(gwb, gSummaryWs, 'Room Summary');
+
+    const gData = buildRoomsSheetData(groupRooms);
+    const gws = XLSX.utils.json_to_sheet(gData);
+    gws['!cols'] = [{wch:16},{wch:10},{wch:12},{wch:14}, ...guestCols, {wch:28}];
+    styleHeaderRow(gws, 0);
+    borderAllCells(gws);
+    XLSX.utils.book_append_sheet(gwb, gws, 'Rooms');
+
+    const safeName = (g.name||'group').replace(/[\\/:*?"<>|]/g,'-').trim() || 'group';
+    XLSX.writeFile(gwb, `חדרים-${safeName}-${today}.xlsx`);
+  });
+}
+
+/* ================= CUSTOMERS IMPORT (Excel template + import) ================= */
+// עמודות התבנית - חייבות להתאים בדיוק לכותרות האלה כדי שהייבוא יזהה אותן
+const IMPORT_CUSTOMER_COLUMNS = [
+  'מזהה מערכת (אין לערוך)', 'שם פרטי (עברית)', 'שם משפחה (עברית)', 'First Name', 'Last Name',
+  'תאריך לידה (YYYY-MM-DD)', 'טלפון', 'מייל', 'מספר דרכון', 'תוקף דרכון (YYYY-MM-DD)',
+  'סטטוס לקוח', 'תזכורת ליצירת קשר (YYYY-MM-DD)', 'אוכל בטיסה', 'מקום בטיסה', 'הערות'
+];
+function downloadImportTemplate(){
+  if(typeof XLSX === 'undefined'){ alert('ספריית האקסל לא נטענה. בדקו את חיבור האינטרנט ונסו שוב.'); return; }
+  const wb = XLSX.utils.book_new();
+
+  // שורה לכל לקוח קיים - כדי שאפשר יהיה לערוך פרטים ולעדכן אותם בחזרה בייבוא
+  const existingRows = state.customers.map(c=>({
+    'מזהה מערכת (אין לערוך)': c.id,
+    'שם פרטי (עברית)': c.firstHe||'', 'שם משפחה (עברית)': c.lastHe||'',
+    'First Name': c.firstEn||'', 'Last Name': c.lastEn||'',
+    'תאריך לידה (YYYY-MM-DD)': c.dob||'', 'טלפון': c.phone||'', 'מייל': c.email||'',
+    'מספר דרכון': c.passportNo||'', 'תוקף דרכון (YYYY-MM-DD)': c.passportExp||'',
+    'סטטוס לקוח': (CUSTOMER_STATUSES[c.status]||CUSTOMER_STATUSES.interested).label,
+    'תזכורת ליצירת קשר (YYYY-MM-DD)': c.reminderDate||'',
+    'אוכל בטיסה': c.mealType||'אוכל רגיל',
+    'מקום בטיסה': c.seatClass||'מקום רגיל',
+    'הערות': c.notes||''
+  }));
+  // שורת דוגמה ריקה בסוף - למילוי לקוח חדש (עמודת המזהה נשארת ריקה)
+  const blankRow = {
+    'מזהה מערכת (אין לערוך)':'', 'שם פרטי (עברית)':'ישראל', 'שם משפחה (עברית)':'ישראלי',
+    'First Name':'Israel', 'Last Name':'Israeli',
+    'תאריך לידה (YYYY-MM-DD)':'1980-05-12', 'טלפון':'0501234567', 'מייל':'israel@example.com',
+    'מספר דרכון':'12345678', 'תוקף דרכון (YYYY-MM-DD)':'2029-01-01',
+    'סטטוס לקוח':'מתעניין', 'תזכורת ליצירת קשר (YYYY-MM-DD)':'2026-08-01', 'אוכל בטיסה':'אוכל רגיל', 'מקום בטיסה':'מקום רגיל', 'הערות':''
+  };
+  const rows = [...existingRows, blankRow];
+
+  const ws = XLSX.utils.json_to_sheet(rows, { header: IMPORT_CUSTOMER_COLUMNS });
+  ws['!cols'] = [{wch:20},{wch:16},{wch:16},{wch:14},{wch:14},{wch:20},{wch:14},{wch:22},{wch:14},{wch:20},{wch:16},{wch:24},{wch:20},{wch:16},{wch:32}];
+  styleHeaderRow(ws, 0);
+  borderAllCells(ws);
+  XLSX.utils.book_append_sheet(wb, ws, 'לקוחות לייבוא');
+
+  // גיליון הוראות
+  const statusOptions = Object.values(CUSTOMER_STATUSES).map(s=>s.label).join(' / ');
+  const instructions = [
+    ['הוראות מילוי התבנית'],
+    [],
+    ['1. השורה הראשונה היא כותרות - אין לשנות אותה.'],
+    ['2. עמודת "מזהה מערכת" מולאה אוטומטית עבור לקוחות שכבר קיימים במערכת - אין לערוך או למחוק אותה.'],
+    ['3. שינוי פרטים בשורה של לקוח קיים (שיש לה מזהה מערכת) ויבוא מחדש של הקובץ - יעדכן את אותו לקוח, ולא ייצור כפילות.'],
+    ['4. כדי להוסיף לקוח חדש - יש להוסיף שורה חדשה ולהשאיר את עמודת "מזהה מערכת" ריקה (כמו בשורה האחרונה בתבנית).'],
+    ['5. יש למלא שם פרטי או שם משפחה בעברית לפחות (שדה חובה) לכל לקוח.'],
+    [`6. עמודת "סטטוס לקוח" - ערכים אפשריים: ${statusOptions}. אם ריק, ייקבע כברירת מחדל "מתעניין".`],
+    ['7. תאריכים - יש להזין בפורמט YYYY-MM-DD (למשל 2026-08-01), או פשוט להשאיר את התא בתבנית תאריך של אקסל.'],
+    ['8. אם מספר דרכון כבר קיים במערכת עבור לקוח אחר (ואין מזהה מערכת תואם), השורה תסומן כפילות ולא תיובא.'],
+    [`9. עמודת "אוכל בטיסה" - ניתן להזין אחת מהאפשרויות: ${MEAL_OPTIONS.join(' / ')}, או כל טקסט חופשי אחר. אם ריק, ייקבע כברירת מחדל "אוכל רגיל".`],
+    [`10. עמודת "מקום בטיסה" - ניתן להזין אחת מהאפשרויות: ${SEAT_OPTIONS.join(' / ')}, או כל טקסט חופשי אחר. אם ריק, ייקבע כברירת מחדל "מקום רגיל".`]
+  ];
+  const insWs = XLSX.utils.aoa_to_sheet(instructions);
+  insWs['!cols'] = [{wch:100}];
+  insWs['!merges'] = [{s:{r:0,c:0}, e:{r:0,c:0}}];
+  XLSX.utils.book_append_sheet(wb, insWs, 'הוראות');
+
+  XLSX.writeFile(wb, `תבנית-ייבוא-לקוחות.xlsx`);
+}
+
+const STATUS_LABEL_TO_KEY = Object.fromEntries(Object.entries(CUSTOMER_STATUSES).map(([k,s])=>[s.label, k]));
+
+function normalizeImportDate(v){
+  if(v===undefined || v===null || v==='') return '';
+  if(v instanceof Date && !isNaN(v.getTime())) return v.toISOString().slice(0,10);
+  const s = String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  let m = s.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})$/); // DD/MM/YYYY or DD.MM.YYYY
+  if(m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return '';
+}
+
+function handleImportCustomersFile(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const wb = XLSX.read(e.target.result, { type:'array', cellDates:true });
+      const sheetName = wb.SheetNames.find(n=>n==='לקוחות לייבוא') || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
+      processCustomerImportRows(rows);
+    }catch(err){
+      alert('לא הצלחתי לקרוא את הקובץ. ודאו שזהו קובץ אקסל תקין (xlsx) שנוצר מהתבנית. פרטי שגיאה: '+err.message);
+    }finally{
+      input.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processCustomerImportRows(rows){
+  const toAdd = [];
+  const toUpdate = [];
+  const duplicates = [];
+  const errors = [];
+  const existingById = new Map(state.customers.map(c=>[c.id, c]));
+  const existingPassports = new Set(state.customers.map(c=>(c.passportNo||'').trim()).filter(Boolean));
+  const seenInFile = new Set();
+
+  rows.forEach((row, i)=>{
+    const rowNum = i+2; // כולל שורת הכותרות
+    const get = (key)=> String(row[key]===undefined||row[key]===null ? '' : row[key]).trim();
+    const id = get('מזהה מערכת (אין לערוך)');
+    const firstHe = get('שם פרטי (עברית)');
+    const lastHe = get('שם משפחה (עברית)');
+    const firstEn = get('First Name');
+    const lastEn = get('Last Name');
+    const phone = get('טלפון');
+    const email = get('מייל');
+    const passportNo = get('מספר דרכון');
+    const dob = normalizeImportDate(row['תאריך לידה (YYYY-MM-DD)']);
+    const passportExp = normalizeImportDate(row['תוקף דרכון (YYYY-MM-DD)']);
+    const reminderDate = normalizeImportDate(row['תזכורת ליצירת קשר (YYYY-MM-DD)']);
+    const statusLabel = get('סטטוס לקוח');
+    const mealType = get('אוכל בטיסה') || 'אוכל רגיל';
+    const seatClass = get('מקום בטיסה') || 'מקום רגיל';
+    const notes = get('הערות');
+
+    if(!firstHe && !lastHe && !firstEn && !lastEn){
+      return; // שורה ריקה לגמרי - מדלגים בשקט
+    }
+    if(!firstHe && !lastHe){
+      errors.push({rowNum, reason:'חסר שם פרטי או שם משפחה בעברית (שדה חובה)'});
+      return;
+    }
+    const isUpdate = id && existingById.has(id);
+    if(!isUpdate && passportNo && (existingPassports.has(passportNo) || seenInFile.has(passportNo))){
+      duplicates.push({rowNum, name:`${firstHe} ${lastHe}`.trim(), passportNo});
+      return;
+    }
+    if(passportNo) seenInFile.add(passportNo);
+
+    const status = STATUS_LABEL_TO_KEY[statusLabel] || 'interested';
+    const data = {
+      firstHe, lastHe, firstEn, lastEn, dob, phone, email,
+      passportNo, passportExp, status, reminderDate: status==='notInterested' ? '' : (reminderDate || defaultReminderDate()), notes, mealType, seatClass
+    };
+
+    if(isUpdate){
+      toUpdate.push({ id, oldName: customerName(existingById.get(id)), data });
+    }else{
+      toAdd.push({ id: uid(), ...data });
+    }
+  });
+
+  showImportPreviewModal(toAdd, toUpdate, duplicates, errors);
+}
+
+let pendingImportAdd = [];
+let pendingImportUpdate = [];
+function showImportPreviewModal(toAdd, toUpdate, duplicates, errors){
+  pendingImportAdd = toAdd;
+  pendingImportUpdate = toUpdate;
+  const listBlock = (title, items, renderItem, color)=> items.length ? `
+    <div style="margin-top:10px;">
+      <b style="color:${color||'var(--ink)'}">${title} (${items.length})</b>
+      <ul style="margin:6px 0 0; padding-inline-start:18px; font-size:13px; color:var(--ink-soft);">
+        ${items.slice(0,25).map(renderItem).join('')}
+        ${items.length>25 ? `<li>...ועוד ${items.length-25}</li>` : ''}
+      </ul>
+    </div>` : '';
+
+  const total = toAdd.length + toUpdate.length;
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal">
+      <div class="modal-head"><h3>תצוגה מקדימה לייבוא לקוחות</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <p style="font-size:14px;">נמצאו <b>${toAdd.length}</b> לקוחות חדשים להוספה ו-<b>${toUpdate.length}</b> לקוחות קיימים לעדכון.</p>
+        ${listBlock('לקוחות חדשים שיתווספו', toAdd, c=>`<li>${esc(customerName(c))}</li>`)}
+        ${listBlock('לקוחות קיימים שיעודכנו', toUpdate, u=>`<li>${esc(u.oldName)}${u.oldName!==customerName(u.data)?` ← ${esc(customerName(u.data))}`:''}</li>`, 'var(--navy)')}
+        ${listBlock('שורות שדולגו - כפילות מספר דרכון קיים במערכת', duplicates, d=>`<li>שורה ${d.rowNum}: ${esc(d.name)} (דרכון ${esc(d.passportNo)})</li>`, 'var(--gold-deep)')}
+        ${listBlock('שורות עם שגיאה - לא יובאו', errors, er=>`<li>שורה ${er.rowNum}: ${esc(er.reason)}</li>`, 'var(--coral)')}
+        ${!total ? `<p style="color:var(--ink-soft); font-size:13px;">אין שינויים לייבוא בקובץ זה.</p>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn gold" ${!total?'disabled':''} onclick="commitCustomerImport()">ייבוא (${toAdd.length} חדשים, ${toUpdate.length} עדכונים)</button>
+        <button class="btn ghost" onclick="closeModal()">ביטול</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function commitCustomerImport(){
+  const toAdd = pendingImportAdd, toUpdate = pendingImportUpdate;
+  pendingImportAdd = []; pendingImportUpdate = [];
+  if(!toAdd.length && !toUpdate.length){ closeModal(); return; }
+  toUpdate.forEach(u=>{
+    const c = state.customers.find(x=>x.id===u.id);
+    if(c) Object.assign(c, u.data);
+  });
+  state.customers.push(...toAdd);
+  await saveList('customers', state.customers);
+  closeModal(); render();
+  alert(`הייבוא הושלם: ${toAdd.length} לקוחות חדשים נוספו, ${toUpdate.length} לקוחות קיימים עודכנו.`);
+}
+
+if(!firebaseReady){
+  const loginScreen = document.getElementById('login-screen');
+  if(loginScreen) loginScreen.style.display = 'none';
+  init();
+}
+</script>
+</body>
+</html>
