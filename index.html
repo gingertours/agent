@@ -559,7 +559,7 @@ async function saveList(key, arr){
 }
 
 /* ---------------- state ---------------- */
-let state = { customers: [], groups: [], rooms: [], payments: [], fileLibrary: [], settings: { documentsFolder: '' }, households: [] };
+let state = { customers: [], groups: [], rooms: [], payments: [], fileLibrary: [], settings: { documentsFolder: '', exchangeRate: 3.7 }, households: [] };
 let ui = { tab:'customers', selectedGroupRooms:null, openGroupId:null, paymentsFilter:'all', search:'' };
 
 const ROOM_TYPES = { single:{label:'סינגל', cap:1}, double:{label:'דאבל', cap:2}, twin:{label:'טווין', cap:2}, triple:{label:'טריפל', cap:3} };
@@ -620,6 +620,39 @@ function statusCell(c){
   return `<span class="pill ${s.pill}">${esc(s.label)}</span>`;
 }
 
+/* ---------------- סדר לקוחות (גרירה ידנית + מיון אוטומטי לפי סטטוס תשלום) ---------------- */
+// עדיפות למיון אוטומטי: משלמים (הכל/חלק/מקדמה) קודם, אחריהם נרשם/נשלח מידע/מתעניין, ולא מעוניין תמיד בסוף
+const CUSTOMER_SORT_PRIORITY = {
+  paidFull:0, paidPartial:1, paidDeposit:2, registered:3, infoSent:4, interested:5, notInterested:6
+};
+let dragCustomerId = null;
+function onCustomerDragStart(id, ev){
+  dragCustomerId = id;
+  if(ev && ev.dataTransfer){ ev.dataTransfer.effectAllowed = 'move'; }
+}
+function onCustomerDragOver(ev){ ev.preventDefault(); if(ev.dataTransfer) ev.dataTransfer.dropEffect = 'move'; }
+async function onCustomerDrop(targetId, ev){
+  ev.preventDefault();
+  if(!dragCustomerId || dragCustomerId===targetId) return;
+  const fromIndex = state.customers.findIndex(c=>c.id===dragCustomerId);
+  const toIndex = state.customers.findIndex(c=>c.id===targetId);
+  dragCustomerId = null;
+  if(fromIndex===-1 || toIndex===-1) return;
+  const [item] = state.customers.splice(fromIndex,1);
+  state.customers.splice(toIndex,0,item);
+  render();
+  await saveList('customers', state.customers);
+}
+async function sortCustomersByPaymentStatus(){
+  state.customers.sort((a,b)=>{
+    const pa = CUSTOMER_SORT_PRIORITY[a.status] ?? 5;
+    const pb = CUSTOMER_SORT_PRIORITY[b.status] ?? 5;
+    return pa - pb;
+  });
+  render();
+  await saveList('customers', state.customers);
+}
+
 async function saveFileDoc(fileId, data){
   if(!firebaseReady) return false;
   try{
@@ -651,13 +684,13 @@ async function deleteFileDoc(fileId){
   }
 }
 async function loadSettings(){
-  if(!firebaseReady) return { documentsFolder: '' };
+  if(!firebaseReady) return { documentsFolder: '', exchangeRate: 3.7 };
   try{
     const doc = await withTimeout(db.collection(FS_COLLECTION).doc('app_settings').get(), 'טעינת הגדרות');
-    return doc.exists ? Object.assign({documentsFolder:''}, doc.data()) : { documentsFolder: '' };
+    return doc.exists ? Object.assign({documentsFolder:'', exchangeRate:3.7}, doc.data()) : { documentsFolder: '', exchangeRate: 3.7 };
   }catch(e){
     console.error('Firestore settings load error', e);
-    return { documentsFolder: '' };
+    return { documentsFolder: '', exchangeRate: 3.7 };
   }
 }
 async function saveSettings(settings){
@@ -927,7 +960,12 @@ function uid(){ return Date.now().toString(36) + Math.random().toString(36).slic
 
 
 function esc(s){ return (s===undefined||s===null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function fmtMoney(n){ return (Number(n)||0).toLocaleString('he-IL'); }
+// מציג סכום כספי: דולרים תמיד כמספר שלם (ללא שברי דולר), שקלים עם עד 2 ספרות אחרי הנקודה
+function fmtMoney(n, currency){
+  const num = Number(n)||0;
+  if(currency==='USD') return Math.round(num).toLocaleString('he-IL');
+  return num.toLocaleString('he-IL', { maximumFractionDigits: 2 });
+}
 function parseAmount(v){
   const cleaned = String(v||'').replace(/[^\d.\-]/g,'');
   const n = parseFloat(cleaned);
@@ -1128,8 +1166,10 @@ function viewCustomers(){
     const coupleCell = partners.length
       ? `<span class="pill neutral" title="תשלום משותף עם ${esc(partners.map(m=>customerName(m)).join(', '))}">👪 ${esc(partners.map(m=>customerName(m)).join(', '))}</span> <button class="icon-btn" style="font-size:11px;" onclick="unlinkHousehold('${c.id}')" title="ניתוק התא המשפחתי">🔓</button>`
       : `<button class="btn ghost small" style="padding:2px 8px; font-size:11.5px;" onclick="openLinkCoupleModal('${c.id}')" title="קישור לבן/בת זוג - תשלום משותף">🔗 קישור לזוג</button>`;
+    const canDrag = !ui.search;
     return `
-    <tr>
+    <tr ${canDrag?`draggable="true" ondragstart="onCustomerDragStart('${c.id}', event)" ondragover="onCustomerDragOver(event)" ondrop="onCustomerDrop('${c.id}', event)"`:''} style="${canDrag?'cursor:grab;':''}">
+      <td class="mono" style="color:var(--ink-soft); text-align:center; ${canDrag?'cursor:grab;':'opacity:.3;'}" title="${canDrag?'גררו לשינוי סדר הלקוחות':'נקו את החיפוש כדי לגרור ולסדר לקוחות'}">⠿⠿</td>
       <td>
         <button class="icon-btn" onclick="openCustomerModal('${c.id}')" title="עריכה">✎</button>
       </td>
@@ -1153,7 +1193,8 @@ function viewCustomers(){
         ${(g||r) ? `<button class="icon-btn del" onclick="removeCustomerFromTrip('${c.id}')" title="הסרה מהקבוצה ומהחדרים (הלקוח יישאר במאגר)">🚫</button>` : `<span style="color:var(--ink-soft); font-size:12px;">—</span>`}
       </td>
     </tr>`;}).join('');
-  if(!list.length) rows = `<tr><td colspan="18"><div class="empty"><div class="stamp">${ui.search?'לא נמצאו תוצאות התואמות לחיפוש':'אין עדיין לקוחות. הוסיפו את הלקוח הראשון כדי להתחיל'}</div></div></td></tr>`;
+  if(!list.length) rows = `<tr><td colspan="19"><div class="empty"><div class="stamp">${ui.search?'לא נמצאו תוצאות התואמות לחיפוש':'אין עדיין לקוחות. הוסיפו את הלקוח הראשון כדי להתחיל'}</div></div></td></tr>`;
+  const searchNote = ui.search ? `<p style="font-size:12px; color:var(--ink-soft); margin:6px 2px 0;">לגרירה ידנית של סדר הלקוחות יש לנקות את שדה החיפוש.</p>` : '';
   return `
   ${birthdayBanner()}
   ${issuesBanner}
@@ -1162,6 +1203,7 @@ function viewCustomers(){
       <h2>כרטיסי לקוח</h2>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <input class="search-box" placeholder="חיפוש לקוח..." value="${esc(ui.search)}" oninput="onSearchInput(this)">
+        <button class="btn ghost" onclick="sortCustomersByPaymentStatus()" title="סידור אוטומטי: משלמים (הכל/חלק/מקדמה) ראשונים, לא מעוניינים אחרונים">↕ מיון לפי סטטוס תשלום</button>
         <button class="btn ghost" onclick="openLibraryModal()">📁 ספריית קבצים</button>
         <button class="btn ghost" onclick="downloadImportTemplate()" title="הורדת קובץ אקסל ריק במבנה הנכון למילוי">⭳ ייצוא לאקסל</button>
         <button class="btn ghost" onclick="document.getElementById('import-customers-file').click()" title="ייבוא לקוחות מקובץ אקסל שמולא לפי התבנית">⭱ ייבוא מאקסל</button>
@@ -1169,8 +1211,9 @@ function viewCustomers(){
         <button class="btn gold" onclick="openCustomerModal()">+ הוספת לקוח</button>
       </div>
     </div>
+    ${searchNote}
     <table>
-      <thead><tr><th>עריכה</th><th>שם</th><th>סטטוס</th><th>קובץ שנשלח</th><th>תזכורת ליצירת קשר</th><th>קבוצה</th><th>חדר</th><th>תא משפחתי</th><th>מס׳ דרכון</th><th>תוקף דרכון</th><th>תוקף מול טיסה</th><th>טלפון</th><th>מייל</th><th>תאריך לידה</th><th>אוכל בטיסה</th><th>מקום בטיסה</th><th>הערות</th><th></th></tr></thead>
+      <thead><tr><th></th><th>עריכה</th><th>שם</th><th>סטטוס</th><th>קובץ שנשלח</th><th>תזכורת ליצירת קשר</th><th>קבוצה</th><th>חדר</th><th>תא משפחתי</th><th>מס׳ דרכון</th><th>תוקף דרכון</th><th>תוקף מול טיסה</th><th>טלפון</th><th>מייל</th><th>תאריך לידה</th><th>אוכל בטיסה</th><th>מקום בטיסה</th><th>הערות</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </div>
@@ -1190,11 +1233,11 @@ function openCustomerModal(id){
           <div class="field"><label>שם משפחה (עברית)</label><input id="f-lastHe" value="${esc(v.lastHe)}"></div>
           <div class="field"><label>First Name (English)</label><input class="ltr" id="f-firstEn" value="${esc(v.firstEn)}"></div>
           <div class="field"><label>Last Name (English)</label><input class="ltr" id="f-lastEn" value="${esc(v.lastEn)}"></div>
-          <div class="field"><label>תאריך לידה</label><input type="date" id="f-dob" value="${esc(v.dob)}"></div>
+          <div class="field"><label>תאריך לידה</label><input type="date" dir="ltr" id="f-dob" value="${esc(v.dob)}"></div>
           <div class="field"><label>טלפון</label><input id="f-phone" value="${esc(v.phone)}"></div>
           <div class="field full"><label>כתובת מייל</label><input class="ltr" type="email" id="f-email" value="${esc(v.email)}"></div>
           <div class="field"><label>מספר דרכון</label><input class="ltr mono" id="f-passportNo" value="${esc(v.passportNo)}"></div>
-          <div class="field"><label>תוקף דרכון</label><input type="date" id="f-passportExp" value="${esc(v.passportExp)}"></div>
+          <div class="field"><label>תוקף דרכון</label><input type="date" dir="ltr" id="f-passportExp" value="${esc(v.passportExp)}"></div>
           <div class="field">
             <label>סטטוס לקוח</label>
             <select id="f-status" data-prev="${esc(v.status||'interested')}" onchange="onStatusFieldChange()">
@@ -1204,7 +1247,7 @@ function openCustomerModal(id){
           <div class="field" id="f-reminderDate-wrap" style="${(v.status==='notInterested')?'display:none;':''}">
             <label>תזכורת ליצירת קשר</label>
             <div style="display:flex; gap:6px; align-items:center;">
-              <input type="date" id="f-reminderDate" value="${esc(v.reminderDate||defaultReminderDate())}" style="flex:1;">
+              <input type="date" dir="ltr" id="f-reminderDate" value="${esc(v.reminderDate||defaultReminderDate())}" style="flex:1;">
               <button type="button" class="btn ghost small" style="white-space:nowrap;" onclick="document.getElementById('f-reminderDate').value=defaultReminderDate();" title="קביעת תזכורת ל-10 ימים מהיום">10 ימים מהיום</button>
             </div>
           </div>
@@ -1337,7 +1380,7 @@ function viewGroups(){
       <div class="title-row" onclick="toggleGroup('${g.id}')" style="cursor:pointer;">
         <div>
           <h3>${esc(g.name)}</h3>
-          <div class="meta"><span>📍 ${esc(g.destination||'—')}</span><span>🗓 ${esc(g.date||'—')}</span><span>👥 ${members.length} משתתפים</span><span>💰 מחיר טיול: ${g.price?(currencySymbol(g.priceCurrency)+fmtMoney(g.price)):'לא הוגדר'}</span></div>
+          <div class="meta"><span>📍 ${esc(g.destination||'—')}</span><span>🗓 ${esc(g.date||'—')}</span><span>👥 ${members.length} משתתפים</span><span>💰 מחיר טיול: ${g.price?(currencySymbol(g.priceCurrency)+fmtMoney(g.price, g.priceCurrency)):'לא הוגדר'}</span></div>
         </div>
         <div style="display:flex; gap:6px;">
           <button class="icon-btn" onclick="event.stopPropagation(); openGroupModal('${g.id}')" title="עריכה">✎</button>
@@ -1394,8 +1437,9 @@ function applyGroupPriceToCustomer(g, cid){
   if(p.requiredManual) return; // כיבוד עדכון ידני קודם - לא דורסים אותו
   const h = findHouseholdOf(cid);
   const multiplier = h ? h.customerIds.length : 1; // מחיר הטיול הוא לאדם - בתא משפחתי מכפילים לפי מספר הנוסעים
-  p.required = (Number(g.price)||0) * multiplier;
+  const rawRequired = (Number(g.price)||0) * multiplier;
   p.currency = g.priceCurrency==='USD' ? 'USD' : 'ILS';
+  p.required = p.currency==='USD' ? Math.round(rawRequired) : Math.round(rawRequired*100)/100;
 }
 // מאפס את הסכום הנדרש של לקוח שהוסר מהקבוצה, רק אם הוא לא עודכן ידנית
 function clearGroupPriceFromCustomer(cid){
@@ -1414,7 +1458,7 @@ function openGroupModal(id){
         <div class="field-grid">
           <div class="field full"><label>שם הקבוצה</label><input id="g-name" value="${esc(v.name)}" placeholder="לדוגמה: טיול גמלאים – יוון"></div>
           <div class="field"><label>יעד</label><input id="g-dest" value="${esc(v.destination)}"></div>
-          <div class="field"><label>תאריך יציאה</label><input type="date" id="g-date" value="${esc(v.date)}"></div>
+          <div class="field"><label>תאריך יציאה</label><input type="date" dir="ltr" id="g-date" value="${esc(v.date)}"></div>
           <div class="field">
             <label>מחיר הטיול לנוסע</label>
             <div style="display:flex; gap:4px; align-items:center;">
@@ -1806,10 +1850,24 @@ function getPayment(customerId){
   if(!Array.isArray(p.payments)){
     p.payments = (Number(p.paid)>0) ? [{date:'', amount:Number(p.paid)||0, method:'', reference:''}] : [];
   }
-  p.payments.forEach(pay=>{ if(pay.reference===undefined) pay.reference=''; });
+  p.payments.forEach(pay=>{
+    if(pay.reference===undefined) pay.reference='';
+    if(pay.enteredCurrency===undefined) pay.enteredCurrency = p.currency;
+    if(pay.enteredAmount===undefined || pay.enteredAmount===null) pay.enteredAmount = pay.amount||0;
+    if(pay.rateOverride===undefined) pay.rateOverride = null;
+  });
   return p;
 }
 function currencySymbol(cur){ return cur==='USD' ? '$' : '₪'; }
+function getExchangeRate(){ return Number(state.settings && state.settings.exchangeRate) || 3.7; }
+function convertAmount(amount, fromCurrency, toCurrency, rate){
+  amount = Number(amount)||0;
+  if(fromCurrency===toCurrency) return amount;
+  rate = Number(rate)>0 ? Number(rate) : getExchangeRate();
+  const converted = fromCurrency==='ILS' ? amount/rate : amount*rate; // ILS->USD: /rate, USD->ILS: *rate
+  // דולרים תמיד מעוגלים לדולר שלם (ללא חלקי דולר); שקלים מעוגלים עד 2 ספרות אחרי הנקודה
+  return toCurrency==='USD' ? Math.round(converted) : Math.round(converted*100)/100;
+}
 function paidTotal(p){
   return p.payments.reduce((sum,x)=>sum+(Number(x.amount)||0), 0);
 }
@@ -1854,14 +1912,33 @@ function viewPayments(){
     } else if(balance<=0){
       pill = `<span class="pill ok">שולם</span>`;
     } else {
-      pill = `<span class="pill warn">חוב ${currencySymbol(p.currency)}${fmtMoney(balance)}</span>`;
+      pill = `<span class="pill warn">חוב ${currencySymbol(p.currency)}${fmtMoney(balance, p.currency)}</span>`;
     }
     const open = ui.openPaymentsCustomerId === repId;
     const paymentRows = p.payments.map((pay,idx)=>`
       <tr>
         <td class="mono" style="font-size:12.5px; color:var(--ink-soft);">תשלום ${idx+1}</td>
-        <td><input type="date" value="${esc(pay.date||'')}" onchange="updatePaymentLine('${repId}',${idx},'date',this.value)"></td>
-        <td><input type="text" inputmode="decimal" class="amount-input mono" value="${pay.amount||0}" onfocus="this.select()" onchange="updatePaymentLine('${repId}',${idx},'amount',this.value)"></td>
+        <td><input type="date" dir="ltr" value="${esc(pay.date||'')}" onchange="updatePaymentLine('${repId}',${idx},'date',this.value)"></td>
+        <td>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <input type="text" inputmode="decimal" class="amount-input mono" style="width:80px;" value="${pay.enteredAmount||0}" onfocus="this.select()" onchange="updatePaymentLine('${repId}',${idx},'enteredAmount',this.value)">
+            <select onchange="updatePaymentLine('${repId}',${idx},'enteredCurrency',this.value)" style="width:56px;">
+              <option value="ILS" ${pay.enteredCurrency!=='USD'?'selected':''}>₪</option>
+              <option value="USD" ${pay.enteredCurrency==='USD'?'selected':''}>$</option>
+            </select>
+          </div>
+          ${pay.enteredCurrency!==p.currency ? `
+          <div style="margin-top:4px; padding:6px 8px; background:var(--parchment); border-radius:6px;">
+            <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
+              <span style="font-size:11px; color:var(--ink-soft);">שער המחאות גבוה (לאומי) ליום התשלום:</span>
+              <input type="text" inputmode="decimal" class="mono" style="width:64px; font-size:12px;" placeholder="${getExchangeRate()}" value="${pay.rateOverride||''}" onfocus="this.select()" onchange="updatePaymentLine('${repId}',${idx},'rateOverride',this.value)" title="שער המחאות גבוה של לאומי לתאריך התשלום. הזינו כאן ידנית לפי הקישור למטה. אם ריק - ישמש השער הכללי (${getExchangeRate()}).">
+              <button class="btn ghost small" style="padding:2px 6px; font-size:11px;" onclick="window.open('https://www.leumi.co.il/he/forex/currency-rates','_blank')" title="פתיחת דף שערי המט״ח ההיסטוריים של בנק לאומי בכרטיסייה חדשה, לבדיקת שער ההמחאות הגבוה ליום התשלום">🔗 בדיקת שער בלאומי</button>
+              <button class="btn ghost small" style="padding:2px 6px; font-size:11px;" onclick="window.open('https://www.bankleumi.co.il/vgnprod/shearim.asp?sitePrefix=','_blank')" title="פתיחת דף שערי המטבע של בנק לאומי (עמוד חלופי) בכרטיסייה חדשה">🔗 שערים - עמוד נוסף</button>
+              ${pay.rateOverride ? `<button class="icon-btn" style="font-size:11px;" onclick="updatePaymentLine('${repId}',${idx},'rateOverride','')" title="איפוס לשער הכללי">↺</button>` : ''}
+            </div>
+            <div style="font-size:11px; color:var(--ink-soft); margin-top:2px;">= ${currencySymbol(p.currency)}${fmtMoney(pay.amount||0, p.currency)} ${pay.rateOverride ? '(שער ספציפי ליום זה)' : '(שער כללי)'}</div>
+          </div>` : ''}
+        </td>
         <td>
           <select onchange="updatePaymentLine('${repId}',${idx},'method',this.value)">
             <option value="">— בחרו —</option>
@@ -1884,14 +1961,14 @@ function viewPayments(){
           </select>
         </div>
         ${g && g.price ? (p.requiredManual
-            ? `<div style="margin-top:4px;"><span class="pill neutral" title="הסכום עודכן ידנית ולא יושפע ממחיר הטיול">עודכן ידנית</span> <button class="btn ghost small" style="padding:2px 6px; font-size:11px;" onclick="resetRequiredToTripPrice('${repId}')" title="חזרה למחיר הטיול (${currencySymbol(g.priceCurrency)}${fmtMoney(g.price)}${u.members.length>1?' × '+u.members.length+' נוסעים':''})">↺ איפוס למחיר הטיול</button></div>`
+            ? `<div style="margin-top:4px;"><span class="pill neutral" title="הסכום עודכן ידנית ולא יושפע ממחיר הטיול">עודכן ידנית</span> <button class="btn ghost small" style="padding:2px 6px; font-size:11px;" onclick="resetRequiredToTripPrice('${repId}')" title="חזרה למחיר הטיול (${currencySymbol(g.priceCurrency)}${fmtMoney(g.price, g.priceCurrency)}${u.members.length>1?' × '+u.members.length+' נוסעים':''})">↺ איפוס למחיר הטיול</button></div>`
             : `<div style="margin-top:4px;"><span class="pill gold" title="הסכום מתעדכן אוטומטית לפי מחיר הטיול${u.members.length>1?' × '+u.members.length+' נוסעים':''}">אוטומטי מהטיול${u.members.length>1?' (× '+u.members.length+')':''}</span></div>`
           ) : ''}
       </td>
       <td>
         <input type="text" inputmode="decimal" class="amount-input mono" style="width:90px;" value="${p.deposit||0}" onfocus="this.select()" onchange="updateDeposit('${repId}',this.value)" title="סכום שנחשב כמקדמה">
       </td>
-      <td class="mono">${currencySymbol(p.currency)}${fmtMoney(paid)}</td>
+      <td class="mono">${currencySymbol(p.currency)}${fmtMoney(paid, p.currency)}</td>
       <td>${pill}</td>
       <td><button class="btn ghost small" onclick="ui.openPaymentsCustomerId = ui.openPaymentsCustomerId==='${repId}' ? null : '${repId}'; render();">${open?'סגירה ▲':'פרטי תשלום ▼'}</button></td>
     </tr>
@@ -1899,7 +1976,7 @@ function viewPayments(){
     <tr>
       <td colspan="7" style="background:var(--parchment); padding:14px 16px;">
         <table>
-          <thead><tr><th></th><th>תאריך</th><th>סכום (${currencySymbol(p.currency)})</th><th>אמצעי תשלום</th><th>מס' אסמכתא</th><th></th></tr></thead>
+          <thead><tr><th></th><th>תאריך</th><th>סכום ששולם (בכל מטבע)</th><th>אמצעי תשלום</th><th>מס' אסמכתא</th><th></th></tr></thead>
           <tbody>${paymentRows || `<tr><td colspan="6" style="color:var(--ink-soft); font-size:13px;">אין עדיין תשלומים רשומים</td></tr>`}</tbody>
         </table>
         ${p.payments.length < 3 ? `<button class="btn gold small" style="margin-top:10px;" onclick="addPaymentLine('${repId}')">+ הוספת תשלום</button>` : `<p style="font-size:12px;color:var(--ink-soft); margin-top:8px;">ניתן לרשום עד 3 תשלומים</p>`}
@@ -1913,12 +1990,17 @@ function viewPayments(){
   return `
   <div class="card">
     <h2>סיכום תשלומים</h2>
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; font-size:13px; color:var(--ink-soft);">
+      <span>שער חליפין (₪ לדולר):</span>
+      <input type="text" inputmode="decimal" class="mono" style="width:70px;" value="${getExchangeRate()}" onfocus="this.select()" onchange="updateExchangeRate(this.value)">
+      <span style="font-size:11.5px;">משמש להמרה כאשר מזינים תשלום במטבע שונה מהסכום הנדרש</span>
+    </div>
     <div style="margin-bottom:16px;">
       <div style="font-size:12.5px; color:var(--ink-soft); margin-bottom:6px;">בשקלים (₪)</div>
       <div class="stats">
-        <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">₪${fmtMoney(totalReqILS)}</div></div>
-        <div class="stat"><div class="label">שולם בפועל</div><div class="value">₪${fmtMoney(totalPaidILS)}</div></div>
-        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">₪${fmtMoney(totalReqILS-totalPaidILS)}</div></div>
+        <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">₪${fmtMoney(totalReqILS, 'ILS')}</div></div>
+        <div class="stat"><div class="label">שולם בפועל</div><div class="value">₪${fmtMoney(totalPaidILS, 'ILS')}</div></div>
+        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">₪${fmtMoney(totalReqILS-totalPaidILS, 'ILS')}</div></div>
       </div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${pctILS}%"></div></div>
       <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctILS}% מהסכום הנדרש בשקלים שולם</div>
@@ -1926,9 +2008,9 @@ function viewPayments(){
     <div>
       <div style="font-size:12.5px; color:var(--ink-soft); margin-bottom:6px;">בדולרים ($)</div>
       <div class="stats">
-        <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">$${fmtMoney(totalReqUSD)}</div></div>
-        <div class="stat"><div class="label">שולם בפועל</div><div class="value">$${fmtMoney(totalPaidUSD)}</div></div>
-        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">$${fmtMoney(totalReqUSD-totalPaidUSD)}</div></div>
+        <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">$${fmtMoney(totalReqUSD, 'USD')}</div></div>
+        <div class="stat"><div class="label">שולם בפועל</div><div class="value">$${fmtMoney(totalPaidUSD, 'USD')}</div></div>
+        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">$${fmtMoney(totalReqUSD-totalPaidUSD, 'USD')}</div></div>
       </div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${pctUSD}%"></div></div>
       <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctUSD}% מהסכום הנדרש בדולרים שולם</div>
@@ -1948,9 +2030,24 @@ function viewPayments(){
     </table>
   </div>`;
 }
+async function updateExchangeRate(value){
+  const rate = parseAmount(value);
+  state.settings.exchangeRate = rate>0 ? rate : 3.7;
+  state.payments.forEach(p=>{
+    (p.payments||[]).forEach(pay=>{
+      // תשלומים עם שער ספציפי שהוזן/נשלף ליום התשלום אינם מושפעים משינוי השער הכללי
+      if(pay.rateOverride) return;
+      pay.amount = convertAmount(pay.enteredAmount, pay.enteredCurrency||p.currency, p.currency);
+    });
+  });
+  await saveSettings(state.settings);
+  await saveList('payments', state.payments);
+  render();
+}
 async function updateRequired(customerId, value){
   const p = getPayment(customerId);
-  p.required = parseAmount(value);
+  const amount = parseAmount(value);
+  p.required = p.currency==='USD' ? Math.round(amount) : Math.round(amount*100)/100;
   p.requiredManual = true; // עדכון ידני - לא יידרס יותר אוטומטית ממחיר הטיול
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
@@ -1962,9 +2059,11 @@ async function resetRequiredToTripPrice(customerId){
   if(!g || !g.price){ alert('לא הוגדר מחיר לטיול המשויך ללקוח זה'); return; }
   const h = findHouseholdOf(customerId);
   const multiplier = h ? h.customerIds.length : 1; // מחיר הטיול הוא לאדם - בתא משפחתי מכפילים לפי מספר הנוסעים
-  p.required = (Number(g.price)||0) * multiplier;
+  const rawRequired = (Number(g.price)||0) * multiplier;
   p.currency = g.priceCurrency==='USD' ? 'USD' : 'ILS';
+  p.required = p.currency==='USD' ? Math.round(rawRequired) : Math.round(rawRequired*100)/100;
   p.requiredManual = false; // חוזרים למעקב אוטומטי אחר מחיר הטיול
+  p.payments.forEach(pay=>{ pay.amount = convertAmount(pay.enteredAmount, pay.enteredCurrency||p.currency, p.currency, pay.rateOverride); });
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
   render();
@@ -1972,13 +2071,15 @@ async function resetRequiredToTripPrice(customerId){
 async function updateRequiredCurrency(customerId, value){
   const p = getPayment(customerId);
   p.currency = value==='USD' ? 'USD' : 'ILS';
+  p.payments.forEach(pay=>{ pay.amount = convertAmount(pay.enteredAmount, pay.enteredCurrency||p.currency, p.currency, pay.rateOverride); });
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
   render();
 }
 async function updateDeposit(customerId, value){
   const p = getPayment(customerId);
-  p.deposit = parseAmount(value);
+  const amount = parseAmount(value);
+  p.deposit = p.currency==='USD' ? Math.round(amount) : Math.round(amount*100)/100;
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
   render();
@@ -1986,7 +2087,7 @@ async function updateDeposit(customerId, value){
 async function addPaymentLine(customerId){
   const p = getPayment(customerId);
   if(p.payments.length>=3) return;
-  p.payments.push({date:'', amount:0, method:'', reference:''});
+  p.payments.push({date:'', amount:0, method:'', reference:'', enteredAmount:0, enteredCurrency:p.currency});
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
   render();
@@ -2000,11 +2101,62 @@ async function removePaymentLine(customerId, idx){
 }
 async function updatePaymentLine(customerId, idx, field, value){
   const p = getPayment(customerId);
-  if(!p.payments[idx]) return;
-  p.payments[idx][field] = field==='amount' ? parseAmount(value) : value;
+  const pay = p.payments[idx];
+  if(!pay) return;
+  if(field==='enteredAmount'){
+    const amount = parseAmount(value);
+    const cur = pay.enteredCurrency||p.currency;
+    pay.enteredAmount = cur==='USD' ? Math.round(amount) : Math.round(amount*100)/100;
+    pay.amount = convertAmount(pay.enteredAmount, cur, p.currency, pay.rateOverride);
+  } else if(field==='enteredCurrency'){
+    pay.enteredCurrency = value==='USD' ? 'USD' : 'ILS';
+    pay.amount = convertAmount(pay.enteredAmount, pay.enteredCurrency, p.currency, pay.rateOverride);
+  } else if(field==='rateOverride'){
+    const rate = parseAmount(value);
+    pay.rateOverride = rate>0 ? rate : null;
+    pay.amount = convertAmount(pay.enteredAmount, pay.enteredCurrency||p.currency, p.currency, pay.rateOverride);
+  } else {
+    pay[field] = field==='amount' ? parseAmount(value) : value;
+  }
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
   render();
+}
+// שליפה אוטומטית של השער היציג של בנק ישראל לתאריך תשלום ספציפי (מקור פומבי, ללא צורך במפתח API)
+async function fetchDailyRateForPayment(customerId, idx){
+  const p = getPayment(customerId);
+  const pay = p.payments[idx];
+  if(!pay) return;
+  if(!pay.date){ alert('יש לבחור תחילה תאריך לתשלום זה, ואז לשלוף את השער היציג של אותו היום.'); return; }
+  const endDate = pay.date;
+  const startDate = new Date(new Date(pay.date).getTime() - 6*24*60*60*1000).toISOString().slice(0,10); // שבוע אחורה, כדי לתפוס את היום העסקי הקרוב אם התאריך חל בסופ"ש/חג
+  try{
+    const url = `https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/EXR/1.0/RER_USD_ILS?c%5BDATA_TYPE%5D=OF00&startperiod=${startDate}&endperiod=${endDate}&format=csv`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('בקשת הרשת נכשלה');
+    const text = await res.text();
+    const lines = text.trim().split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length < 2) throw new Error('לא נמצא נתון שער לתאריך המבוקש');
+    const header = lines[0].split(',');
+    const idxTime = header.indexOf('TIME_PERIOD');
+    const idxVal = header.indexOf('OBS_VALUE');
+    if(idxTime===-1 || idxVal===-1) throw new Error('פורמט תגובה לא צפוי');
+    const dataRows = lines.slice(1).map(l=>l.split(','));
+    const last = dataRows[dataRows.length-1]; // השורה האחרונה = היום העסקי הקרוב ביותר לתאריך התשלום
+    const rate = parseFloat(last[idxVal]);
+    const rateDate = last[idxTime];
+    if(!rate || isNaN(rate)) throw new Error('לא נמצא ערך שער תקין');
+    pay.rateOverride = rate;
+    pay.amount = convertAmount(pay.enteredAmount, pay.enteredCurrency||p.currency, p.currency, rate);
+    await saveList('payments', state.payments);
+    await autoUpdateCustomerStatus(customerId);
+    render();
+    if(rateDate !== pay.date){
+      alert(`לא פורסם שער יציג בתאריך ${pay.date} (כנראה סופ"ש/חג). נעשה שימוש בשער היציג האחרון שפורסם לפני התאריך: ${rateDate} — ${rate}`);
+    }
+  }catch(err){
+    alert('לא הצלחנו לשלוף אוטומטית את השער היציג של בנק ישראל (ייתכן שהדפדפן חוסם את הבקשה). ניתן להזין את השער באופן ידני בשדה "שער ליום התשלום".');
+  }
 }
 
 /* ---------------- עדכון סטטוס לקוח אוטומטי לפי תשלומים ----------------
