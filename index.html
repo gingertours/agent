@@ -1190,7 +1190,8 @@ function viewCustomers(){
       <td>${esc(c.seatClass||'מקום רגיל')}</td>
       <td style="max-width:160px; font-size:12.5px; color:var(--ink-soft);" title="${esc(c.notes||'')}">${c.notes ? esc(c.notes.length>40 ? c.notes.slice(0,40)+'…' : c.notes) : '—'}</td>
       <td>
-        ${(g||r) ? `<button class="icon-btn del" onclick="removeCustomerFromTrip('${c.id}')" title="הסרה מהקבוצה ומהחדרים (הלקוח יישאר במאגר)">🚫</button>` : `<span style="color:var(--ink-soft); font-size:12px;">—</span>`}
+        ${c.email && c.email.trim() ? `<button class="icon-btn" onclick="openEmailCustomerModal('${c.id}')" title="שליחת מייל ל-${esc(c.email.trim())}">✉</button>` : `<button class="icon-btn" disabled title="ללקוח אין כתובת מייל">✉</button>`}
+        ${(g||r) ? `<button class="icon-btn del" onclick="removeCustomerFromTrip('${c.id}')" title="הסרה מהקבוצה ומהחדרים (הלקוח יישאר במאגר)">🚫</button>` : ''}
       </td>
     </tr>`;}).join('');
   if(!list.length) rows = `<tr><td colspan="19"><div class="empty"><div class="stamp">${ui.search?'לא נמצאו תוצאות התואמות לחיפוש':'אין עדיין לקוחות. הוסיפו את הלקוח הראשון כדי להתחיל'}</div></div></td></tr>`;
@@ -1282,6 +1283,7 @@ function openCustomerModal(id){
       </div>
       <div class="modal-foot">
         <button class="btn gold" onclick="saveCustomer('${c?c.id:''}')">${c?'שמירת שינויים':'הוספת לקוח'}</button>
+        ${c ? `<button class="btn ghost" onclick="openEmailCustomerModal('${c.id}')" title="שליחת מייל ללקוח זה">✉ שליחת מייל</button>` : ''}
         <button class="btn ghost" onclick="closeModal()">ביטול</button>
       </div>
     </div>
@@ -1777,6 +1779,60 @@ async function unlinkHousehold(customerId){
   }
   await Promise.all([saveList('households', state.households), saveList('payments', state.payments)]);
   render();
+}
+// פתיחת חלונית לשליחת מייל חופשי ללקוח ספציפי - נושא וגוף ניתנים לעריכה, נשלח דרך תוכנת המייל של המשתמש
+function openEmailCustomerModal(customerId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  if(!c.email || !c.email.trim()){ alert('ללקוח זה לא הוגדרה כתובת מייל. ניתן להוסיף כתובת מייל בעריכת כרטיס הלקוח.'); return; }
+  const RLM = '\u200F';
+  const name = c.firstHe || c.firstEn || '';
+  const g = findGroupOf(customerId);
+  const defaultSubject = g ? `${RLM}לגבי הטיול שלך - ${g.name}` : `${RLM}פנייה מ-ג'ינג'ר תיירות`;
+  const defaultBody = [
+    `${name?name+' היקר/ה':'שלום'},`,
+    '',
+    '',
+    '',
+    'בברכה,',
+    `צוות ג'ינג'ר תיירות`
+  ].map(line=>RLM+line).join('\n');
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-head"><h3>שליחת מייל ל-${esc(customerName(c))}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <div class="field">
+          <label>אל</label>
+          <input type="text" class="ltr" value="${esc(c.email.trim())}" disabled>
+        </div>
+        <div class="field">
+          <label>נושא</label>
+          <input type="text" id="email-customer-subject" value="${esc(defaultSubject)}">
+        </div>
+        <div class="field">
+          <label>תוכן ההודעה</label>
+          <textarea id="email-customer-body" rows="9">${esc(defaultBody)}</textarea>
+        </div>
+        <p style="font-size:12px; color:var(--ink-soft); line-height:1.5; margin-top:6px;">
+          בלחיצה על "פתיחה בתוכנת המייל" ייפתח חלון הודעה חדשה בתוכנת המייל שלך (למשל Gmail או Outlook), עם הנמען, הנושא והתוכן שהוזנו כאן ממולאים מראש. השליחה בפועל מתבצעת משם.
+        </p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" onclick="closeModal()">ביטול</button>
+        <button class="btn gold" onclick="sendEmailToCustomer('${customerId}')">✉ פתיחה בתוכנת המייל</button>
+      </div>
+    </div>
+  </div>`;
+}
+function sendEmailToCustomer(customerId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c || !c.email) return;
+  const subject = document.getElementById('email-customer-subject').value || '';
+  const body = document.getElementById('email-customer-body').value || '';
+  const mailtoLink = `mailto:${c.email.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailtoLink;
+  closeModal();
 }
 function openLinkCoupleModal(customerId){
   const c = state.customers.find(x=>x.id===customerId);
