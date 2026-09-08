@@ -399,6 +399,7 @@ footer.note{font-size:12px; color:var(--ink-soft); text-align:center; margin-top
       <p>מסוף הסוכן · ניהול לקוחות, חדרים, תשלומים וקבוצות נסיעה</p>
     </div>
     <button class="btn export-btn" onclick="exportToExcel()">⭳ ייצוא הכל לאקסל</button>
+    <button class="btn ghost" style="border-color:#F4F1E6; color:#F4F1E6;" onclick="openBackupModal()">🗄 גיבוי ושחזור</button>
     <button class="btn ghost" style="border-color:#F4F1E6; color:#F4F1E6;" onclick="if(firebaseReady) firebase.auth().signOut();">🔒 התנתקות</button>
   </div>
 </header>
@@ -413,6 +414,8 @@ footer.note{font-size:12px; color:var(--ink-soft); text-align:center; margin-top
 <main id="content"></main>
 
 <footer class="note">הנתונים נשמרים בפיירבייס (Firestore) של פרויקט הפיירבייס שהגדרתם, וזמינים מכל מכשיר שמריץ את הקובץ עם אותם פרטי חיבור.</footer>
+
+<input type="file" id="restore-backup-file" accept=".json" style="display:none" onchange="handleRestoreBackupFile(this)">
 
 <div id="debug-panel" onclick="this.style.display='none';" style="display:none; position:fixed; inset:0; z-index:9999; background:#2b0000; color:#ffdddd; font-family:monospace; font-size:13px; padding:16px; padding-top:50px; overflow:auto; direction:ltr; text-align:left; white-space:pre-wrap;">
   <div style="position:fixed; top:0; right:0; left:0; background:#4a0000; padding:10px 16px; font-weight:bold;">⚠ שגיאה נתפסה — הקישו כדי לסגור ולנסות שוב</div>
@@ -1515,6 +1518,7 @@ async function deleteGroup(id){
 
 /* ================= ROOMS ================= */
 const PAYMENT_METHODS = { bank:'העברה בנקאית', check:'צ׳ק', credit:'כרטיס אשראי', cash:'מזומן' };
+const MAX_PAYMENTS = 5; // מספר מקסימלי של שורות תשלום לכל לקוח/תא משפחתי
 
 function viewRooms(){
   if(!state.groups.length){
@@ -1911,6 +1915,10 @@ function getPayment(customerId){
     if(pay.enteredCurrency===undefined) pay.enteredCurrency = p.currency;
     if(pay.enteredAmount===undefined || pay.enteredAmount===null) pay.enteredAmount = pay.amount||0;
     if(pay.rateOverride===undefined) pay.rateOverride = null;
+    if(pay.invoiceIssued===undefined) pay.invoiceIssued = false;
+    if(pay.invoiceDate===undefined) pay.invoiceDate = '';
+    if(pay.receiptIssued===undefined) pay.receiptIssued = false;
+    if(pay.receiptDate===undefined) pay.receiptDate = '';
   });
   return p;
 }
@@ -2002,6 +2010,18 @@ function viewPayments(){
           </select>
         </td>
         <td><input type="text" class="mono" style="width:110px;" placeholder="מס' אסמכתא" value="${esc(pay.reference||'')}" onchange="updatePaymentLine('${repId}',${idx},'reference',this.value)"></td>
+        <td>
+          <label style="display:flex; align-items:center; gap:5px; font-size:12px; white-space:nowrap;">
+            <input type="checkbox" ${pay.invoiceIssued?'checked':''} onchange="updatePaymentLine('${repId}',${idx},'invoiceIssued', this.checked)"> הוצאה חשבונית
+          </label>
+          ${pay.invoiceIssued ? `<input type="date" dir="ltr" style="width:132px; margin-top:4px;" value="${esc(pay.invoiceDate||'')}" onchange="updatePaymentLine('${repId}',${idx},'invoiceDate',this.value)" title="תאריך הוצאת החשבונית (אופציונלי)">` : ''}
+        </td>
+        <td>
+          <label style="display:flex; align-items:center; gap:5px; font-size:12px; white-space:nowrap;">
+            <input type="checkbox" ${pay.receiptIssued?'checked':''} onchange="updatePaymentLine('${repId}',${idx},'receiptIssued', this.checked)"> הוצאה קבלה
+          </label>
+          ${pay.receiptIssued ? `<input type="date" dir="ltr" style="width:132px; margin-top:4px;" value="${esc(pay.receiptDate||'')}" onchange="updatePaymentLine('${repId}',${idx},'receiptDate',this.value)" title="תאריך הוצאת הקבלה (אופציונלי)">` : ''}
+        </td>
         <td><button class="icon-btn del" onclick="removePaymentLine('${repId}',${idx})" title="הסרת תשלום">✕</button></td>
       </tr>`).join('');
     return `
@@ -2032,10 +2052,10 @@ function viewPayments(){
     <tr>
       <td colspan="7" style="background:var(--parchment); padding:14px 16px;">
         <table>
-          <thead><tr><th></th><th>תאריך</th><th>סכום ששולם (בכל מטבע)</th><th>אמצעי תשלום</th><th>מס' אסמכתא</th><th></th></tr></thead>
-          <tbody>${paymentRows || `<tr><td colspan="6" style="color:var(--ink-soft); font-size:13px;">אין עדיין תשלומים רשומים</td></tr>`}</tbody>
+          <thead><tr><th></th><th>תאריך</th><th>סכום ששולם (בכל מטבע)</th><th>אמצעי תשלום</th><th>מס' אסמכתא</th><th>חשבונית</th><th>קבלה</th><th></th></tr></thead>
+          <tbody>${paymentRows || `<tr><td colspan="8" style="color:var(--ink-soft); font-size:13px;">אין עדיין תשלומים רשומים</td></tr>`}</tbody>
         </table>
-        ${p.payments.length < 3 ? `<button class="btn gold small" style="margin-top:10px;" onclick="addPaymentLine('${repId}')">+ הוספת תשלום</button>` : `<p style="font-size:12px;color:var(--ink-soft); margin-top:8px;">ניתן לרשום עד 3 תשלומים</p>`}
+        ${p.payments.length < MAX_PAYMENTS ? `<button class="btn gold small" style="margin-top:10px;" onclick="addPaymentLine('${repId}')">+ הוספת תשלום</button>` : `<p style="font-size:12px;color:var(--ink-soft); margin-top:8px;">ניתן לרשום עד ${MAX_PAYMENTS} תשלומים</p>`}
       </td>
     </tr>` : ''}`;
   }).join('');
@@ -2142,14 +2162,18 @@ async function updateDeposit(customerId, value){
 }
 async function addPaymentLine(customerId){
   const p = getPayment(customerId);
-  if(p.payments.length>=3) return;
-  p.payments.push({date:'', amount:0, method:'', reference:'', enteredAmount:0, enteredCurrency:p.currency});
+  if(p.payments.length>=MAX_PAYMENTS) return;
+  p.payments.push({date:'', amount:0, method:'', reference:'', enteredAmount:0, enteredCurrency:p.currency, invoiceIssued:false, invoiceDate:'', receiptIssued:false, receiptDate:''});
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
   render();
 }
 async function removePaymentLine(customerId, idx){
   const p = getPayment(customerId);
+  const pay = p.payments[idx];
+  if(!pay) return;
+  const label = pay.date ? `תשלום מתאריך ${fmtDateDMY(pay.date)}` : `תשלום ${idx+1}`;
+  if(!confirm(`האם אתה בטוח שברצונך למחוק את ${label}? הפעולה אינה הפיכה.`)) return;
   p.payments.splice(idx,1);
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
@@ -2401,19 +2425,23 @@ function exportToExcel(){
       'סכום מקדמה': Number(p.deposit)||0,
       'מטבע': p.currency==='USD' ? 'USD' : 'ILS'
     };
-    for(let i=0;i<3;i++){
+    for(let i=0;i<MAX_PAYMENTS;i++){
       const pay = p.payments[i];
       row[`תשלום ${i+1} - תאריך`] = pay?fmtDateDMY(pay.date):'';
       row[`תשלום ${i+1} - סכום`] = pay?(Number(pay.amount)||0):'';
       row[`תשלום ${i+1} - אמצעי`] = pay&&pay.method?(PAYMENT_METHODS[pay.method]||''):'';
       row[`תשלום ${i+1} - אסמכתא`] = pay?(pay.reference||''):'';
+      row[`תשלום ${i+1} - חשבונית`] = pay ? (pay.invoiceIssued ? (pay.invoiceDate ? `הוצאה (${fmtDateDMY(pay.invoiceDate)})` : 'הוצאה') : 'לא הוצאה') : '';
+      row[`תשלום ${i+1} - קבלה`] = pay ? (pay.receiptIssued ? (pay.receiptDate ? `הוצאה (${fmtDateDMY(pay.receiptDate)})` : 'הוצאה') : 'לא הוצאה') : '';
     }
     row['סה״כ שולם'] = paid;
     row['יתרה'] = (Number(p.required)||0)-paid;
     return row;
   });
+  const paymentColWidths = [];
+  for(let i=0;i<MAX_PAYMENTS;i++) paymentColWidths.push({wch:12},{wch:12},{wch:14},{wch:12},{wch:16},{wch:16});
   const paymentsWs = XLSX.utils.json_to_sheet(paymentsSheet.length?paymentsSheet:[{'הערה':'אין נתונים'}]);
-  paymentsWs['!cols'] = [{wch:18},{wch:16},{wch:12},{wch:12},{wch:9},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12}];
+  paymentsWs['!cols'] = [{wch:18},{wch:16},{wch:12},{wch:12},{wch:9}, ...paymentColWidths, {wch:12},{wch:12}];
   styleHeaderRow(paymentsWs, 0);
   borderAllCells(paymentsWs);
   XLSX.utils.book_append_sheet(wb, paymentsWs, 'תשלומים');
@@ -2439,6 +2467,155 @@ function exportToExcel(){
     const safeName = (g.name||'group').replace(/[\\/:*?"<>|]/g,'-').trim() || 'group';
     XLSX.writeFile(gwb, `חדרים-${safeName}-${today}.xlsx`);
   });
+}
+
+/* ================= גיבוי ושחזור נתונים (JSON) =================
+   בשונה מייצוא לאקסל (שנועד לצפייה/עריכה), גיבוי JSON שומר את כל הנתונים
+   במדויק כמו שהם במסד הנתונים, כדי שיהיה אפשר לשחזר אותם בחזרה במקרה
+   של תקלה, מחיקה בטעות, או כדי לעבור בין מכשירים. */
+function openBackupModal(){
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-head"><h3>גיבוי ושחזור נתונים</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <div style="margin-bottom:22px;">
+          <h4 style="margin:0 0 6px; font-size:14.5px; color:var(--navy);">הורדת גיבוי</h4>
+          <p style="font-size:13px; color:var(--ink-soft); line-height:1.6; margin:0 0 10px;">
+            שומר קובץ (JSON) עם כל הנתונים במערכת: לקוחות, קבוצות, חדרים, תשלומים, ספריית קבצים (מטא-דאטה), תאי משפחה והגדרות.
+            מומלץ להוריד גיבוי מזמן לזמן ולפני שינויים גדולים, ולשמור אותו במקום בטוח (למשל תיקייה משותפת או Google Drive).
+          </p>
+          <button class="btn gold" onclick="downloadBackup()">⭳ הורדת גיבוי מלא</button>
+        </div>
+        <div style="border-top:1px solid var(--line); padding-top:18px;">
+          <h4 style="margin:0 0 6px; font-size:14.5px; color:var(--coral);">שחזור מגיבוי</h4>
+          <p style="font-size:13px; color:var(--ink-soft); line-height:1.6; margin:0 0 10px;">
+            ⚠ שחזור מגיבוי <b>מוחק ומחליף את כל הנתונים הנוכחיים במערכת</b> בנתונים מתוך קובץ הגיבוי שנבחר. הפעולה אינה הפיכה -
+            מומלץ להשתמש בה רק כשיש בעיה בנתונים הנוכחיים ורוצים לחזור למצב קודם ששמור בגיבוי.
+          </p>
+          <button class="btn coral" onclick="document.getElementById('restore-backup-file').click()">⭱ בחירת קובץ גיבוי לשחזור</button>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" onclick="closeModal()">סגירה</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function downloadBackup(){
+  const backup = {
+    type: 'ginger-tours-backup',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    data: {
+      customers: state.customers,
+      groups: state.groups,
+      rooms: state.rooms,
+      payments: state.payments,
+      fileLibrary: state.fileLibrary,
+      households: state.households,
+      settings: state.settings
+    }
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `גיבוי-גינגר-תיירות-${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+let pendingRestoreData = null;
+function handleRestoreBackupFile(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const parsed = JSON.parse(e.target.result);
+      const data = (parsed && parsed.data && typeof parsed.data === 'object') ? parsed.data : parsed;
+      if(!data || typeof data !== 'object') throw new Error('מבנה קובץ לא תקין');
+      showRestorePreviewModal(data, parsed && parsed.exportedAt);
+    }catch(err){
+      alert('לא הצלחתי לקרוא את קובץ הגיבוי. ודאו שזהו קובץ JSON תקין שהופק מ"הורדת גיבוי" במערכת הזו. פרטי שגיאה: '+err.message);
+    }finally{
+      input.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showRestorePreviewModal(data, exportedAt){
+  pendingRestoreData = data;
+  const cnt = (arr)=> Array.isArray(arr) ? arr.length : 0;
+  let dateLine = '';
+  if(exportedAt){
+    const d = new Date(exportedAt);
+    if(!isNaN(d.getTime())) dateLine = `<p style="font-size:13px; color:var(--ink-soft); margin:0 0 12px;">תאריך הגיבוי: ${esc(d.toLocaleString('he-IL'))}</p>`;
+  }
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal" style="max-width:460px;">
+      <div class="modal-head"><h3>אישור שחזור מגיבוי</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        ${dateLine}
+        <p style="font-size:14px; margin:0 0 6px;">הקובץ שנבחר מכיל:</p>
+        <ul style="font-size:14px; line-height:1.7; padding-inline-start:18px; margin:0 0 14px;">
+          <li>לקוחות: ${cnt(data.customers)}</li>
+          <li>קבוצות: ${cnt(data.groups)}</li>
+          <li>חדרים: ${cnt(data.rooms)}</li>
+          <li>תשלומים: ${cnt(data.payments)}</li>
+          <li>קבצים בספרייה (מטא-דאטה): ${cnt(data.fileLibrary)}</li>
+          <li>תאי משפחה: ${cnt(data.households)}</li>
+        </ul>
+        <p style="font-size:13.5px; color:var(--coral); font-weight:600; line-height:1.6;">
+          ⚠ שחזור זה ימחק את כל הנתונים הקיימים כרגע במערכת ויחליף אותם בנתונים שלמעלה, לכל הצוות. הפעולה אינה הפיכה.
+        </p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn coral" onclick="commitRestoreBackup()">כן, שחזר והחלף את כל הנתונים</button>
+        <button class="btn ghost" onclick="closeModal()">ביטול</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function commitRestoreBackup(){
+  const data = pendingRestoreData;
+  pendingRestoreData = null;
+  if(!data){ closeModal(); return; }
+  closeModal();
+  dataLoading = true; render();
+  const settings = Object.assign({ documentsFolder:'', exchangeRate:3.7 }, data.settings||{});
+  const newCustomers = Array.isArray(data.customers) ? data.customers : [];
+  const newGroups = Array.isArray(data.groups) ? data.groups : [];
+  const newRooms = Array.isArray(data.rooms) ? data.rooms : [];
+  const newPayments = Array.isArray(data.payments) ? data.payments : [];
+  const newFileLibrary = Array.isArray(data.fileLibrary) ? data.fileLibrary : [];
+  const newHouseholds = Array.isArray(data.households) ? data.households : [];
+  await Promise.all([
+    saveList('customers', newCustomers),
+    saveList('groups', newGroups),
+    saveList('rooms', newRooms),
+    saveList('payments', newPayments),
+    saveList('fileLibrary', newFileLibrary),
+    saveList('households', newHouseholds),
+    saveSettings(settings)
+  ]);
+  state.customers = newCustomers;
+  state.groups = newGroups;
+  state.rooms = newRooms;
+  state.payments = newPayments;
+  state.fileLibrary = newFileLibrary;
+  state.households = newHouseholds;
+  state.settings = settings;
+  dataLoading = false;
+  render();
+  alert('השחזור הושלם בהצלחה. כל הנתונים במערכת הוחלפו בנתונים מהגיבוי שנבחר.');
 }
 
 /* ================= CUSTOMERS IMPORT (Excel template + import) ================= */
