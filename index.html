@@ -1907,6 +1907,8 @@ function getPayment(customerId){
   if(!p.currency) p.currency = 'ILS';
   if(p.deposit===undefined || p.deposit===null) p.deposit = 0;
   if(p.requiredManual===undefined || p.requiredManual===null) p.requiredManual = false;
+  if(p.discount===undefined || p.discount===null) p.discount = 0;
+  if(p.discountNote===undefined || p.discountNote===null) p.discountNote = '';
   if(!Array.isArray(p.payments)){
     p.payments = (Number(p.paid)>0) ? [{date:'', amount:Number(p.paid)||0, method:'', reference:''}] : [];
   }
@@ -1934,6 +1936,10 @@ function convertAmount(amount, fromCurrency, toCurrency, rate){
 }
 function paidTotal(p){
   return p.payments.reduce((sum,x)=>sum+(Number(x.amount)||0), 0);
+}
+// הסכום שנדרש בפועל לתשלום, אחרי הפחתת ההנחה (אם הוזנה)
+function netRequired(p){
+  return Math.max(0, (Number(p.required)||0) - (Number(p.discount)||0));
 }
 function billingUnits(customers){
   const seen = new Set();
@@ -1963,9 +1969,10 @@ function viewPayments(){
     const repId = u.repId;
     const p = getPayment(repId);
     const paid = paidTotal(p);
-    if(p.currency==='USD'){ totalReqUSD += Number(p.required)||0; totalPaidUSD += paid; }
-    else { totalReqILS += Number(p.required)||0; totalPaidILS += paid; }
-    const balance = (Number(p.required)||0) - paid;
+    const netReq = netRequired(p);
+    if(p.currency==='USD'){ totalReqUSD += netReq; totalPaidUSD += paid; }
+    else { totalReqILS += netReq; totalPaidILS += paid; }
+    const balance = netReq - paid;
     const g = findGroupOf(repId);
     const unitLabel = u.type==='household'
       ? `${u.members.map(m=>customerName(m)).join(' + ')} <span class="pill neutral" title="תא משפחתי - תשלום משותף" style="margin-inline-start:4px;">👪 זוג</span> <button class="icon-btn" style="font-size:11px;" onclick="unlinkHousehold('${repId}')" title="ניתוק התא המשפחתי">🔓</button>`
@@ -2040,6 +2047,14 @@ function viewPayments(){
             ? `<div style="margin-top:4px;"><span class="pill neutral" title="הסכום עודכן ידנית ולא יושפע ממחיר הטיול">עודכן ידנית</span> <button class="btn ghost small" style="padding:2px 6px; font-size:11px;" onclick="resetRequiredToTripPrice('${repId}')" title="חזרה למחיר הטיול (${currencySymbol(g.priceCurrency)}${fmtMoney(g.price, g.priceCurrency)}${u.members.length>1?' × '+u.members.length+' נוסעים':''})">↺ איפוס למחיר הטיול</button></div>`
             : `<div style="margin-top:4px;"><span class="pill gold" title="הסכום מתעדכן אוטומטית לפי מחיר הטיול${u.members.length>1?' × '+u.members.length+' נוסעים':''}">אוטומטי מהטיול${u.members.length>1?' (× '+u.members.length+')':''}</span></div>`
           ) : ''}
+        <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--line);">
+          <label style="display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--ink-soft);">
+            הנחה:
+            <input type="text" inputmode="decimal" class="amount-input mono" style="width:70px;" value="${p.discount||0}" onfocus="this.select()" onchange="updateDiscount('${repId}',this.value)" title="סכום ההנחה, באותו מטבע של הסכום הנדרש">
+          </label>
+          <input type="text" style="width:100%; margin-top:4px; font-size:11.5px;" placeholder="הסבר על ההנחה (אופציונלי)" value="${esc(p.discountNote||'')}" onchange="updateDiscountNote('${repId}',this.value)">
+          ${Number(p.discount)>0 ? `<div style="font-size:11px; color:var(--ink-soft); margin-top:3px;">לתשלום בפועל: ${currencySymbol(p.currency)}${fmtMoney(netRequired(p), p.currency)}</div>` : ''}
+        </div>
       </td>
       <td>
         <input type="text" inputmode="decimal" class="amount-input mono" style="width:90px;" value="${p.deposit||0}" onfocus="this.select()" onchange="updateDeposit('${repId}',this.value)" title="סכום שנחשב כמקדמה">
@@ -2160,6 +2175,20 @@ async function updateDeposit(customerId, value){
   await autoUpdateCustomerStatus(customerId);
   render();
 }
+async function updateDiscount(customerId, value){
+  const p = getPayment(customerId);
+  const amount = parseAmount(value);
+  p.discount = p.currency==='USD' ? Math.round(amount) : Math.round(amount*100)/100;
+  await saveList('payments', state.payments);
+  await autoUpdateCustomerStatus(customerId);
+  render();
+}
+async function updateDiscountNote(customerId, value){
+  const p = getPayment(customerId);
+  p.discountNote = value;
+  await saveList('payments', state.payments);
+  render();
+}
 async function addPaymentLine(customerId){
   const p = getPayment(customerId);
   if(p.payments.length>=MAX_PAYMENTS) return;
@@ -2246,7 +2275,7 @@ async function fetchDailyRateForPayment(customerId, idx){
 function computeAutoPaymentStatus(customerId){
   const p = getPayment(customerId);
   const paid = paidTotal(p);
-  const required = Number(p.required)||0;
+  const required = netRequired(p);
   const deposit = Number(p.deposit)||0;
   if(required>0 && paid>=required) return 'paidFull';
   if(deposit>0 && paid>deposit) return 'paidPartial';
@@ -2415,13 +2444,20 @@ function exportToExcel(){
   XLSX.utils.book_append_sheet(wb, roomsWs, 'Rooms');
 
   // תשלומים
-  const paymentsSheet = state.customers.map(c=>{
-    const p = getPayment(c.id);
-    const g = findGroupOf(c.id);
+  // חשוב: משתמשים ב-billingUnits (ולא ברשימת כל הלקוחות) כדי שכל תא משפחתי (זוג עם תשלום משותף)
+  // ייספר פעם אחת בלבד בדוח - אחרת הסכום שלו נספר פעמיים (פעם לכל בן/בת זוג).
+  const paymentUnits = billingUnits(state.customers);
+  const paymentsSheet = paymentUnits.map(u=>{
+    const repId = u.repId;
+    const p = getPayment(repId);
+    const g = findGroupOf(repId);
     const paid = paidTotal(p);
+    const label = u.members.map(m=>customerName(m)).join(' + ');
     const row = {
-      'לקוח': customerName(c), 'קבוצה': g?g.name:'',
+      'לקוח': label, 'קבוצה': g?g.name:'',
       'סכום נדרש': Number(p.required)||0,
+      'הנחה': Number(p.discount)||0,
+      'הסבר הנחה': p.discountNote||'',
       'סכום מקדמה': Number(p.deposit)||0,
       'מטבע': p.currency==='USD' ? 'USD' : 'ILS'
     };
@@ -2435,13 +2471,13 @@ function exportToExcel(){
       row[`תשלום ${i+1} - קבלה`] = pay ? (pay.receiptIssued ? (pay.receiptDate ? `הוצאה (${fmtDateDMY(pay.receiptDate)})` : 'הוצאה') : 'לא הוצאה') : '';
     }
     row['סה״כ שולם'] = paid;
-    row['יתרה'] = (Number(p.required)||0)-paid;
+    row['יתרה'] = netRequired(p)-paid;
     return row;
   });
   const paymentColWidths = [];
   for(let i=0;i<MAX_PAYMENTS;i++) paymentColWidths.push({wch:12},{wch:12},{wch:14},{wch:12},{wch:16},{wch:16});
   const paymentsWs = XLSX.utils.json_to_sheet(paymentsSheet.length?paymentsSheet:[{'הערה':'אין נתונים'}]);
-  paymentsWs['!cols'] = [{wch:18},{wch:16},{wch:12},{wch:12},{wch:9}, ...paymentColWidths, {wch:12},{wch:12}];
+  paymentsWs['!cols'] = [{wch:18},{wch:16},{wch:12},{wch:10},{wch:22},{wch:12},{wch:9}, ...paymentColWidths, {wch:12},{wch:12}];
   styleHeaderRow(paymentsWs, 0);
   borderAllCells(paymentsWs);
   XLSX.utils.book_append_sheet(wb, paymentsWs, 'תשלומים');
