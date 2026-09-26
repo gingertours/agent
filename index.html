@@ -1176,7 +1176,7 @@ function viewCustomers(){
       <td>
         <button class="icon-btn" onclick="openCustomerModal('${c.id}')" title="עריכה">✎</button>
       </td>
-      <td><b>${esc(customerName(c))}</b><br><span class="ltr mono" style="font-size:12px;color:var(--ink-soft)">${esc(c.firstEn||'')} ${esc(c.lastEn||'')}</span></td>
+      <td><b>${esc(customerName(c))}</b> ${(c.tripsHistory&&c.tripsHistory.length) ? `<span class="pill neutral" style="cursor:pointer; font-size:10.5px; padding:1px 6px;" onclick="openTripHistoryModal('${c.id}')" title="לקוח חוזר - לחיצה לצפייה בהיסטוריית הטיולים">🧳 ${c.tripsHistory.length}</span>` : ''}<br><span class="ltr mono" style="font-size:12px;color:var(--ink-soft)">${esc(c.firstEn||'')} ${esc(c.lastEn||'')}</span></td>
       <td>${statusCell(c)}</td>
       <td>${filesCell(c)}</td>
       <td>${reminderCell(c)}</td>
@@ -1282,6 +1282,7 @@ function openCustomerModal(id){
             <input id="f-seatClassCustom" value="${esc((v.seatClass && !SEAT_OPTIONS.includes(v.seatClass)) ? v.seatClass : '')}" placeholder="פרטו את סוג המקום...">
           </div>
           <div class="field full"><label>הערות</label><textarea id="f-notes" placeholder="הערה חופשית על הלקוח...">${esc(v.notes||'')}</textarea></div>
+          ${c && c.tripsHistory && c.tripsHistory.length ? `<div class="field full"><button type="button" class="btn ghost small" style="padding:2px 8px; font-size:11.5px;" onclick="openTripHistoryModal('${c.id}')">🧳 צפייה בהיסטוריית טיולים (${c.tripsHistory.length})</button></div>` : ''}
         </div>
       </div>
       <div class="modal-foot">
@@ -1389,6 +1390,7 @@ function viewGroups(){
         </div>
         <div style="display:flex; gap:6px;">
           <button class="icon-btn" onclick="event.stopPropagation(); openGroupModal('${g.id}')" title="עריכה">✎</button>
+          <button class="btn ghost small" style="padding:2px 8px; font-size:11.5px;" onclick="event.stopPropagation(); archiveGroup('${g.id}')" title="סיום הטיול: שמירת חדרים ותשלומים כהיסטוריה אצל כל לקוח, וחזרת הקבוצה למאגר לקוחות רגיל">🏁 סיום טיול והעברה להיסטוריה</button>
           <button class="icon-btn del" onclick="event.stopPropagation(); deleteGroup('${g.id}')" title="מחיקה">✕</button>
         </div>
       </div>
@@ -1514,6 +1516,103 @@ async function deleteGroup(id){
   if(ui.openGroupId===id) ui.openGroupId=null;
   await Promise.all([saveList('groups',state.groups), saveList('rooms',state.rooms), saveList('payments', state.payments)]);
   render();
+}
+
+/* ---------------- סיום טיול והעברה להיסטוריה ----------------
+   כאשר קבוצה יוצאת לדרך וה"עסקה" נסגרת, הפעולה הזו שומרת לכל לקוח שהשתתף
+   רשומת היסטוריה (יעד, תאריך, חדר, פרטי תשלום) בכרטיס הלקוח שלו לצמיתות,
+   ואז מנקה מהמערכת הפעילה את הקבוצה, החדרים והתשלומים של אותו טיול -
+   כך שהלקוח חוזר להיות "לקוח מן המניין" הזמין לשיוך לטיול הבא, עם תגית
+   שמראה שהוא כבר נסע איתנו בעבר. */
+function buildTripHistoryEntry(g, customerId){
+  const room = state.rooms.find(r=>r.groupId===g.id && r.customerIds.includes(customerId));
+  const p = getPayment(customerId); // מטפל גם בתשלום משותף (תא משפחתי)
+  return {
+    groupId: g.id,
+    groupName: g.name || '',
+    destination: g.destination || '',
+    date: g.date || '',
+    roomType: room ? room.type : null,
+    roomLabel: room ? ROOM_TYPES[room.type].label : null,
+    currency: p.currency || 'ILS',
+    required: Number(p.required)||0,
+    discount: Number(p.discount)||0,
+    deposit: Number(p.deposit)||0,
+    paid: paidTotal(p),
+    payments: (p.payments||[]).map(x=>({date:x.date||'', amount:Number(x.amount)||0, method:x.method||'', reference:x.reference||''})),
+    archivedAt: todayStr(),
+  };
+}
+async function archiveGroup(id){
+  const g = state.groups.find(x=>x.id===id);
+  if(!g) return;
+  const members = g.customerIds.map(cid=>state.customers.find(c=>c.id===cid)).filter(Boolean);
+  if(!members.length){ alert('אין משתתפים בקבוצה זו - אין מה להעביר להיסטוריה.'); return; }
+  const names = members.map(m=>customerName(m)).join(', ');
+  if(!confirm(`לסיים את הטיול "${g.name}" ולהעביר להיסטוריה?\n\nפעולה זו:\n- תשמור לכל אחד מ-${members.length} המשתתפים (${names}) רשומת היסטוריה עם פרטי החדר והתשלום.\n- תנקה את שיוך הקבוצה, שיבוץ החדר וסטטוס התשלום שלהם, כך שיחזרו להיות לקוחות רגילים הזמינים לטיול הבא.\n- תמחק את הקבוצה ואת החדרים המשויכים אליה.\n\nהפעולה בלתי הפיכה. להמשיך?`)) return;
+
+  const seenHouseholds = new Set();
+  members.forEach(c=>{
+    const entry = buildTripHistoryEntry(g, c.id);
+    if(!Array.isArray(c.tripsHistory)) c.tripsHistory = [];
+    c.tripsHistory.push(entry);
+    // ניקוי התשלום הפעיל של הלקוח/התא המשפחתי (רק פעם אחת לכל תא משפחתי)
+    const h = findHouseholdOf(c.id);
+    if(h){
+      if(!seenHouseholds.has(h.id)){
+        seenHouseholds.add(h.id);
+        state.payments = state.payments.filter(p=>p.householdId!==h.id);
+      }
+    } else {
+      state.payments = state.payments.filter(p=>p.customerId!==c.id);
+    }
+    // איפוס סטטוס הלקוח וחזרה למצב רגיל
+    c.status = 'interested';
+    c.reminderDate = '';
+  });
+
+  state.groups = state.groups.filter(x=>x.id!==id);
+  state.rooms = state.rooms.filter(r=>r.groupId!==id);
+  if(ui.selectedGroupRooms===id) ui.selectedGroupRooms=null;
+  if(ui.openGroupId===id) ui.openGroupId=null;
+
+  await Promise.all([
+    saveList('customers', state.customers),
+    saveList('groups', state.groups),
+    saveList('rooms', state.rooms),
+    saveList('payments', state.payments),
+  ]);
+  render();
+}
+function openTripHistoryModal(customerId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  const list = Array.isArray(c.tripsHistory) ? c.tripsHistory.slice().reverse() : [];
+  const rows = list.map(t=>{
+    const paidStr = `${currencySymbol(t.currency)}${fmtMoney(t.paid, t.currency)} מתוך ${currencySymbol(t.currency)}${fmtMoney(Math.max(0,(t.required||0)-(t.discount||0)), t.currency)}`;
+    return `<tr>
+      <td><b>${esc(t.groupName)}</b></td>
+      <td>${esc(t.destination||'—')}</td>
+      <td class="mono">${esc(t.date||'—')}</td>
+      <td>${t.roomLabel?esc(t.roomLabel):'—'}</td>
+      <td class="mono">${paidStr}</td>
+      <td class="mono" style="color:var(--ink-soft); font-size:12px;">${esc(t.archivedAt||'—')}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('modal-root').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal" style="max-width:720px;">
+      <div class="modal-head"><h3>היסטוריית טיולים — ${esc(customerName(c))}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        ${list.length ? `
+        <table>
+          <thead><tr><th>קבוצה</th><th>יעד</th><th>תאריך</th><th>חדר</th><th>תשלום</th><th>נשמר בתאריך</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>` : `<div class="empty"><div class="stamp">אין עדיין טיולים קודמים ללקוח זה</div></div>`}
+      </div>
+      <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">סגירה</button></div>
+    </div>
+  </div>`;
 }
 
 /* ================= ROOMS ================= */
