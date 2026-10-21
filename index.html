@@ -2071,6 +2071,13 @@ function billingUnits(customers){
   });
   return units;
 }
+function diffNoteHtml(list, cur){
+  if(!list.length) return '';
+  const sym = currencySymbol(cur);
+  const total = list.reduce((a,x)=>a+(x.balance-x.future),0);
+  const items = list.map(x=>`${esc(x.name)} (יתרה ${x.balance<0?'-':''}${sym}${fmtMoney(Math.abs(x.balance),cur)}, עתידי ${sym}${fmtMoney(x.future,cur)})`).join(' · ');
+  return `<div style="font-size:12px; color:var(--ink-soft); margin-top:8px; padding:8px 10px; background:var(--parchment); border-radius:6px;"><b>הפרש בין יתרה לתשלום עתידי: ${total<0?'-':''}${sym}${fmtMoney(Math.abs(total),cur)}</b> — נובע מ-${list.length} לקוחות: ${items}</div>`;
+}
 function viewPayments(){
   let customers = state.customers;
   if(ui.paymentsFilter!=='all'){
@@ -2078,6 +2085,7 @@ function viewPayments(){
   }
   const units = billingUnits(customers);
   let totalReqILS=0, totalPaidILS=0, totalReqUSD=0, totalPaidUSD=0, totalFutILS=0, totalFutUSD=0;
+  const diffsILS=[], diffsUSD=[]; // לקוחות שבהם היתרה שונה מהתשלום העתידי (להסבר ההפרש בסיכום)
   const rows = units.map(u=>{
     const repId = u.repId;
     const p = getPayment(repId);
@@ -2089,6 +2097,9 @@ function viewPayments(){
     if(p.currency==='USD'){ totalReqUSD += netReq; totalPaidUSD += paid; totalFutUSD += future; }
     else { totalReqILS += netReq; totalPaidILS += paid; totalFutILS += future; }
     const balance = netReq - paid;
+    if(Math.abs(balance - future) > (p.currency==='USD' ? 0.5 : 0.005)){
+      (p.currency==='USD' ? diffsUSD : diffsILS).push({ name: u.members.map(m=>customerName(m)).join(' + '), balance, future });
+    }
     const g = findGroupOf(repId);
     const unitLabel = u.type==='household'
       ? `${u.members.map(m=>customerName(m)).join(' + ')} <span class="pill neutral" title="תא משפחתי - תשלום משותף" style="margin-inline-start:4px;">👪 זוג</span> <button class="icon-btn" style="font-size:11px;" onclick="unlinkHousehold('${repId}')" title="ניתוק התא המשפחתי">🔓</button>`
@@ -2184,7 +2195,7 @@ function viewPayments(){
         <input type="text" inputmode="decimal" class="amount-input mono" style="width:90px;" value="${p.deposit||0}" onfocus="this.select()" onchange="updateDeposit('${repId}',this.value)" title="סכום שנחשב כמקדמה">
       </td>
       <td class="mono">${currencySymbol(p.currency)}${fmtMoney(paid, p.currency)}</td>
-      <td>${future>0 ? `<div class="mono">${currencySymbol(p.currency)}${fmtMoney(future, p.currency)}</div>${nextFut ? `<div style="font-size:11px; margin-top:2px; color:${futDue?'var(--coral)':'var(--ink-soft)'}; ${futDue?'font-weight:600;':''}">${futDue?'הגיע המועד: ':'הבא: '}${fmtDateDMY(nextFut)}</div>` : ''}` : `<span style="color:var(--ink-soft)">—</span>`}</td>
+      <td>${future>0 ? `<div class="mono">${currencySymbol(p.currency)}${fmtMoney(future, p.currency)}</div>${nextFut ? `<div style="font-size:11px; margin-top:2px; color:${futDue?'var(--coral)':'var(--ink-soft)'}; ${futDue?'font-weight:600;':''}">${futDue?'הגיע המועד: ':'הבא: '}${fmtDateDMY(nextFut)}</div>` : ''}` : `<span style="color:var(--ink-soft)">—</span>`}${Math.abs(balance-future)>(p.currency==='USD'?0.5:0.005) ? `<div style="font-size:11px; margin-top:3px; color:var(--coral);" title="היתרה לתשלום של לקוח זה שונה מהסכום העתידי">יתרה: ${balance<0?'-':''}${currencySymbol(p.currency)}${fmtMoney(Math.abs(balance), p.currency)}</div>` : ''}</td>
       <td>${pill}</td>
       <td><button class="btn ghost small" onclick="ui.openPaymentsCustomerId = ui.openPaymentsCustomerId==='${repId}' ? null : '${repId}'; render();">${open?'סגירה ▲':'פרטי תשלום ▼'}</button></td>
     </tr>
@@ -2219,6 +2230,7 @@ function viewPayments(){
         <div class="stat"><div class="label">תשלום עתידי</div><div class="value">₪${fmtMoney(totalFutILS, 'ILS')}</div></div>
         <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">₪${fmtMoney(totalReqILS-totalPaidILS, 'ILS')}</div></div>
       </div>
+      ${diffNoteHtml(diffsILS,'ILS')}
       <div class="progress-wrap"><div class="progress-bar" style="width:${pctILS}%"></div></div>
       <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctILS}% מהסכום הנדרש בשקלים שולם</div>
     </div>
@@ -2230,6 +2242,7 @@ function viewPayments(){
         <div class="stat"><div class="label">תשלום עתידי</div><div class="value">$${fmtMoney(totalFutUSD, 'USD')}</div></div>
         <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">$${fmtMoney(totalReqUSD-totalPaidUSD, 'USD')}</div></div>
       </div>
+      ${diffNoteHtml(diffsUSD,'USD')}
       <div class="progress-wrap"><div class="progress-bar" style="width:${pctUSD}%"></div></div>
       <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctUSD}% מהסכום הנדרש בדולרים שולם</div>
     </div>
