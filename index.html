@@ -1538,7 +1538,7 @@ function buildTripHistoryEntry(g, customerId){
     required: Number(p.required)||0,
     discount: Number(p.discount)||0,
     deposit: Number(p.deposit)||0,
-    paid: paidTotal(p),
+    paid: paidOrFutureTotal(p),
     payments: (p.payments||[]).map(x=>({date:x.date||'', amount:Number(x.amount)||0, method:x.method||'', reference:x.reference||'', future:!!x.future})),
     archivedAt: todayStr(),
   };
@@ -2037,13 +2037,17 @@ function convertAmount(amount, fromCurrency, toCurrency, rate){
   // דולרים תמיד מעוגלים לדולר שלם (ללא חלקי דולר); שקלים מעוגלים עד 2 ספרות אחרי הנקודה
   return toCurrency==='USD' ? Math.round(converted) : Math.round(converted*100)/100;
 }
-// שולם בפועל: רק תשלומים שלא סומנו כ"עתידי (טרם שולם)"
+// שולם בפועל (נכנס לבנק): רק תשלומים שלא סומנו כ"עתידי"
 function paidTotal(p){
   return p.payments.reduce((sum,x)=>sum+(x.future ? 0 : (Number(x.amount)||0)), 0);
 }
-// תשלומים עתידיים: שורות תשלום שסומנו כעתידיות (למשל תשלומי אשראי שטרם נגבו)
+// תשלומים עתידיים: שולמו (למשל באשראי) אך טרם נכנסו לחשבון הבנק. נספרים בנפרד מ"שולם בפועל"
 function futureTotal(p){
   return p.payments.reduce((sum,x)=>sum+(x.future ? (Number(x.amount)||0) : 0), 0);
+}
+// שולם בפועל + תשלומים עתידיים (כבר שולמו, למשל באשראי, אך טרם נכנסו לחשבון הבנק)
+function paidOrFutureTotal(p){
+  return paidTotal(p) + futureTotal(p);
 }
 // התאריך המוקדם ביותר של תשלום עתידי (אם הוזן), לצורך מעקב
 function nextFutureDate(p){
@@ -2071,13 +2075,6 @@ function billingUnits(customers){
   });
   return units;
 }
-function diffNoteHtml(list, cur){
-  if(!list.length) return '';
-  const sym = currencySymbol(cur);
-  const total = list.reduce((a,x)=>a+(x.balance-x.future),0);
-  const items = list.map(x=>`${esc(x.name)} (יתרה ${x.balance<0?'-':''}${sym}${fmtMoney(Math.abs(x.balance),cur)}, עתידי ${sym}${fmtMoney(x.future,cur)})`).join(' · ');
-  return `<div style="font-size:12px; color:var(--ink-soft); margin-top:8px; padding:8px 10px; background:var(--parchment); border-radius:6px;"><b>הפרש בין יתרה לתשלום עתידי: ${total<0?'-':''}${sym}${fmtMoney(Math.abs(total),cur)}</b> — נובע מ-${list.length} לקוחות: ${items}</div>`;
-}
 function viewPayments(){
   let customers = state.customers;
   if(ui.paymentsFilter!=='all'){
@@ -2085,7 +2082,6 @@ function viewPayments(){
   }
   const units = billingUnits(customers);
   let totalReqILS=0, totalPaidILS=0, totalReqUSD=0, totalPaidUSD=0, totalFutILS=0, totalFutUSD=0;
-  const diffsILS=[], diffsUSD=[]; // לקוחות שבהם היתרה שונה מהתשלום העתידי (להסבר ההפרש בסיכום)
   const rows = units.map(u=>{
     const repId = u.repId;
     const p = getPayment(repId);
@@ -2096,21 +2092,19 @@ function viewPayments(){
     const netReq = netRequired(p);
     if(p.currency==='USD'){ totalReqUSD += netReq; totalPaidUSD += paid; totalFutUSD += future; }
     else { totalReqILS += netReq; totalPaidILS += paid; totalFutILS += future; }
-    const balance = netReq - paid;
-    if(Math.abs(balance - future) > (p.currency==='USD' ? 0.5 : 0.005)){
-      (p.currency==='USD' ? diffsUSD : diffsILS).push({ name: u.members.map(m=>customerName(m)).join(' + '), balance, future });
-    }
+    // יתרה לתשלום: רק מה שעדיין לא שולם בשום צורה (לא בפועל ולא כתשלום עתידי)
+    const balance = netReq - paid - future;
     const g = findGroupOf(repId);
     const unitLabel = u.type==='household'
       ? `${u.members.map(m=>customerName(m)).join(' + ')} <span class="pill neutral" title="תא משפחתי - תשלום משותף" style="margin-inline-start:4px;">👪 זוג</span> <button class="icon-btn" style="font-size:11px;" onclick="unlinkHousehold('${repId}')" title="ניתוק התא המשפחתי">🔓</button>`
       : `${esc(customerName(u.members[0]))} <button class="icon-btn" style="font-size:11px;" onclick="openLinkCoupleModal('${repId}')" title="קישור לבן/בת זוג לתשלום משותף">🔗</button>`;
     let pill;
-    if((Number(p.required)||0) === 0 && paid === 0){
+    if((Number(p.required)||0) === 0 && paid === 0 && future === 0){
       pill = `<span class="pill neutral">לא הוזן סכום</span>`;
+    } else if(balance<=0 && future>0){
+      pill = `<span class="pill gold" title="שולם במלואו, מתוכו חלק עדיין לא נכנס לחשבון הבנק">שולם (כולל עתידי)</span>`;
     } else if(balance<=0){
       pill = `<span class="pill ok">שולם</span>`;
-    } else if(future>0 && future>=balance){
-      pill = `<span class="pill gold" title="כל היתרה מכוסה בתשלומים עתידיים שטרם שולמו">מתוכנן ${currencySymbol(p.currency)}${fmtMoney(balance, p.currency)}</span>`;
     } else {
       pill = `<span class="pill warn">חוב ${currencySymbol(p.currency)}${fmtMoney(balance, p.currency)}</span>`;
     }
@@ -2148,9 +2142,9 @@ function viewPayments(){
         <td><input type="text" class="mono" style="width:110px;" placeholder="מס' אסמכתא" value="${esc(pay.reference||'')}" onchange="updatePaymentLine('${repId}',${idx},'reference',this.value)"></td>
         <td>
           <label style="display:flex; align-items:center; gap:5px; font-size:12px; white-space:nowrap;">
-            <input type="checkbox" ${pay.future?'checked':''} onchange="updatePaymentLine('${repId}',${idx},'future', this.checked)"> תשלום עתידי (טרם שולם)
+            <input type="checkbox" ${pay.future?'checked':''} onchange="updatePaymentLine('${repId}',${idx},'future', this.checked)"> תשלום עתידי (שולם, טרם נכנס לבנק)
           </label>
-          ${pay.future && pay.date && pay.date<=todayStr() ? `<div style="font-size:11px; color:var(--coral); font-weight:600; margin-top:3px;">הגיע מועד התשלום — לסמן כשולם?</div>` : ''}
+          ${pay.future && pay.date && pay.date<=todayStr() ? `<div style="font-size:11px; color:var(--coral); font-weight:600; margin-top:3px;">הגיע מועד הכניסה לבנק — לבטל סימון עתידי?</div>` : ''}
         </td>
         <td>
           <label style="display:flex; align-items:center; gap:5px; font-size:12px; white-space:nowrap;">
@@ -2195,7 +2189,7 @@ function viewPayments(){
         <input type="text" inputmode="decimal" class="amount-input mono" style="width:90px;" value="${p.deposit||0}" onfocus="this.select()" onchange="updateDeposit('${repId}',this.value)" title="סכום שנחשב כמקדמה">
       </td>
       <td class="mono">${currencySymbol(p.currency)}${fmtMoney(paid, p.currency)}</td>
-      <td>${future>0 ? `<div class="mono">${currencySymbol(p.currency)}${fmtMoney(future, p.currency)}</div>${nextFut ? `<div style="font-size:11px; margin-top:2px; color:${futDue?'var(--coral)':'var(--ink-soft)'}; ${futDue?'font-weight:600;':''}">${futDue?'הגיע המועד: ':'הבא: '}${fmtDateDMY(nextFut)}</div>` : ''}` : `<span style="color:var(--ink-soft)">—</span>`}${Math.abs(balance-future)>(p.currency==='USD'?0.5:0.005) ? `<div style="font-size:11px; margin-top:3px; color:var(--coral);" title="היתרה לתשלום של לקוח זה שונה מהסכום העתידי">יתרה: ${balance<0?'-':''}${currencySymbol(p.currency)}${fmtMoney(Math.abs(balance), p.currency)}</div>` : ''}</td>
+      <td>${future>0 ? `<div class="mono">${currencySymbol(p.currency)}${fmtMoney(future, p.currency)}</div>${nextFut ? `<div style="font-size:11px; margin-top:2px; color:${futDue?'var(--coral)':'var(--ink-soft)'}; ${futDue?'font-weight:600;':''}">${futDue?'הגיע המועד: ':'הבא: '}${fmtDateDMY(nextFut)}</div>` : ''}` : `<span style="color:var(--ink-soft)">—</span>`}</td>
       <td>${pill}</td>
       <td><button class="btn ghost small" onclick="ui.openPaymentsCustomerId = ui.openPaymentsCustomerId==='${repId}' ? null : '${repId}'; render();">${open?'סגירה ▲':'פרטי תשלום ▼'}</button></td>
     </tr>
@@ -2211,8 +2205,8 @@ function viewPayments(){
     </tr>` : ''}`;
   }).join('');
   const rowsOut = units.length ? rows : `<tr><td colspan="8"><div class="empty"><div class="stamp">אין לקוחות להצגה</div></div></td></tr>`;
-  const pctILS = totalReqILS>0 ? Math.min(100, Math.round(totalPaidILS/totalReqILS*100)) : 0;
-  const pctUSD = totalReqUSD>0 ? Math.min(100, Math.round(totalPaidUSD/totalReqUSD*100)) : 0;
+  const pctILS = totalReqILS>0 ? Math.min(100, Math.round((totalPaidILS+totalFutILS)/totalReqILS*100)) : 0;
+  const pctUSD = totalReqUSD>0 ? Math.min(100, Math.round((totalPaidUSD+totalFutUSD)/totalReqUSD*100)) : 0;
 
   return `
   <div class="card">
@@ -2228,11 +2222,10 @@ function viewPayments(){
         <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">₪${fmtMoney(totalReqILS, 'ILS')}</div></div>
         <div class="stat"><div class="label">שולם בפועל</div><div class="value">₪${fmtMoney(totalPaidILS, 'ILS')}</div></div>
         <div class="stat"><div class="label">תשלום עתידי</div><div class="value">₪${fmtMoney(totalFutILS, 'ILS')}</div></div>
-        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">₪${fmtMoney(totalReqILS-totalPaidILS, 'ILS')}</div></div>
+        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">₪${fmtMoney(totalReqILS-totalPaidILS-totalFutILS, 'ILS')}</div></div>
       </div>
-      ${diffNoteHtml(diffsILS,'ILS')}
       <div class="progress-wrap"><div class="progress-bar" style="width:${pctILS}%"></div></div>
-      <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctILS}% מהסכום הנדרש בשקלים שולם</div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctILS}% מהסכום הנדרש בשקלים שולם (כולל תשלומים עתידיים)</div>
     </div>
     <div>
       <div style="font-size:12.5px; color:var(--ink-soft); margin-bottom:6px;">בדולרים ($)</div>
@@ -2240,11 +2233,10 @@ function viewPayments(){
         <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">$${fmtMoney(totalReqUSD, 'USD')}</div></div>
         <div class="stat"><div class="label">שולם בפועל</div><div class="value">$${fmtMoney(totalPaidUSD, 'USD')}</div></div>
         <div class="stat"><div class="label">תשלום עתידי</div><div class="value">$${fmtMoney(totalFutUSD, 'USD')}</div></div>
-        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">$${fmtMoney(totalReqUSD-totalPaidUSD, 'USD')}</div></div>
+        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">$${fmtMoney(totalReqUSD-totalPaidUSD-totalFutUSD, 'USD')}</div></div>
       </div>
-      ${diffNoteHtml(diffsUSD,'USD')}
       <div class="progress-wrap"><div class="progress-bar" style="width:${pctUSD}%"></div></div>
-      <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctUSD}% מהסכום הנדרש בדולרים שולם</div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctUSD}% מהסכום הנדרש בדולרים שולם (כולל תשלומים עתידיים)</div>
     </div>
   </div>
   <div class="card">
@@ -2414,7 +2406,7 @@ async function fetchDailyRateForPayment(customerId, idx){
    כמו 'מתעניין'/'נשלח מידע'/'נרשם', אלא אם אין יותר תשלומים בכלל). */
 function computeAutoPaymentStatus(customerId){
   const p = getPayment(customerId);
-  const paid = paidTotal(p);
+  const paid = paidOrFutureTotal(p);
   const required = netRequired(p);
   const deposit = Number(p.deposit)||0;
   if(required>0 && paid>=required) return 'paidFull';
@@ -2432,7 +2424,7 @@ async function autoUpdateCustomerStatus(customerId){
     const c = state.customers.find(x=>x.id===cid);
     if(!c) continue;
     const p = getPayment(cid);
-    const paid = paidTotal(p);
+    const paid = paidOrFutureTotal(p);
     let newStatus = computeAutoPaymentStatus(cid);
     if(!newStatus && paid<=0 && PAYMENT_STATUSES.includes(c.status)){
       newStatus = 'registered'; // כל התשלומים הוסרו — חוזרים לסטטוס שלפני תשלום
@@ -2605,7 +2597,7 @@ function exportToExcel(){
       const pay = p.payments[i];
       row[`תשלום ${i+1} - תאריך`] = pay?fmtDateDMY(pay.date):'';
       row[`תשלום ${i+1} - סכום`] = pay?(Number(pay.amount)||0):'';
-      row[`תשלום ${i+1} - סטטוס`] = pay ? (pay.future ? 'עתידי (טרם שולם)' : 'שולם') : '';
+      row[`תשלום ${i+1} - סטטוס`] = pay ? (pay.future ? 'עתידי (שולם, טרם נכנס לבנק)' : 'שולם') : '';
       row[`תשלום ${i+1} - אמצעי`] = pay&&pay.method?(PAYMENT_METHODS[pay.method]||''):'';
       row[`תשלום ${i+1} - אסמכתא`] = pay?(pay.reference||''):'';
       row[`תשלום ${i+1} - חשבונית`] = pay ? (pay.invoiceIssued ? (pay.invoiceDate ? `הוצאה (${fmtDateDMY(pay.invoiceDate)})` : 'הוצאה') : 'לא הוצאה') : '';
@@ -2613,7 +2605,7 @@ function exportToExcel(){
     }
     row['סה״כ שולם'] = paid;
     row['תשלום עתידי'] = futureTotal(p);
-    row['יתרה'] = netRequired(p)-paid;
+    row['יתרה'] = netRequired(p)-paid-futureTotal(p);
     return row;
   });
   const paymentColWidths = [];
