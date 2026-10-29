@@ -1539,7 +1539,7 @@ function buildTripHistoryEntry(g, customerId){
     discount: Number(p.discount)||0,
     deposit: Number(p.deposit)||0,
     paid: paidOrFutureTotal(p),
-    payments: (p.payments||[]).map(x=>({date:x.date||'', amount:Number(x.amount)||0, method:x.method||'', reference:x.reference||'', future:!!x.future})),
+    payments: (p.payments||[]).map(x=>({date:x.date||'', amount:Number(x.amount)||0, method:x.method||'', reference:x.reference||'', future:!!x.future, unpaid:!!x.unpaid})),
     archivedAt: todayStr(),
   };
 }
@@ -2020,6 +2020,7 @@ function getPayment(customerId){
     if(pay.enteredAmount===undefined || pay.enteredAmount===null) pay.enteredAmount = pay.amount||0;
     if(pay.rateOverride===undefined) pay.rateOverride = null;
     if(pay.future===undefined) pay.future = false;
+    if(pay.unpaid===undefined) pay.unpaid = false;
     if(pay.invoiceIssued===undefined) pay.invoiceIssued = false;
     if(pay.invoiceDate===undefined) pay.invoiceDate = '';
     if(pay.receiptIssued===undefined) pay.receiptIssued = false;
@@ -2039,11 +2040,15 @@ function convertAmount(amount, fromCurrency, toCurrency, rate){
 }
 // שולם בפועל (נכנס לבנק): רק תשלומים שלא סומנו כ"עתידי"
 function paidTotal(p){
-  return p.payments.reduce((sum,x)=>sum+(x.future ? 0 : (Number(x.amount)||0)), 0);
+  return p.payments.reduce((sum,x)=>sum+((x.future||x.unpaid) ? 0 : (Number(x.amount)||0)), 0);
 }
 // תשלומים עתידיים: שולמו (למשל באשראי) אך טרם נכנסו לחשבון הבנק. נספרים בנפרד מ"שולם בפועל"
 function futureTotal(p){
   return p.payments.reduce((sum,x)=>sum+(x.future ? (Number(x.amount)||0) : 0), 0);
+}
+// תשלומים שסומנו "לא שולם": שורות תשלום מתוכננות שטרם שולמו כלל. נכללות ביתרה לתשלום
+function unpaidTotal(p){
+  return p.payments.reduce((sum,x)=>sum+(x.unpaid ? (Number(x.amount)||0) : 0), 0);
 }
 // שולם בפועל + תשלומים עתידיים (כבר שולמו, למשל באשראי, אך טרם נכנסו לחשבון הבנק)
 function paidOrFutureTotal(p){
@@ -2087,6 +2092,7 @@ function viewPayments(){
     const p = getPayment(repId);
     const paid = paidTotal(p);
     const future = futureTotal(p);
+    const unpaidAmt = unpaidTotal(p);
     const nextFut = nextFutureDate(p);
     const futDue = !!nextFut && nextFut <= todayStr();
     const netReq = netRequired(p);
@@ -2105,12 +2111,14 @@ function viewPayments(){
       pill = `<span class="pill gold" title="שולם במלואו, מתוכו חלק עדיין לא נכנס לחשבון הבנק">שולם (כולל עתידי)</span>`;
     } else if(balance<=0){
       pill = `<span class="pill ok">שולם</span>`;
+    } else if(unpaidAmt>0){
+      pill = `<span class="pill warn" title="יש תשלום שסומן כלא שולם">לא שולם ${currencySymbol(p.currency)}${fmtMoney(balance, p.currency)}</span>`;
     } else {
       pill = `<span class="pill warn">חוב ${currencySymbol(p.currency)}${fmtMoney(balance, p.currency)}</span>`;
     }
     const open = ui.openPaymentsCustomerId === repId;
     const paymentRows = p.payments.map((pay,idx)=>`
-      <tr${pay.future ? ' style="background:rgba(184,137,63,0.10);"' : ''}>
+      <tr${pay.unpaid ? ' style="background:rgba(182,73,61,0.10);"' : (pay.future ? ' style="background:rgba(184,137,63,0.10);"' : '')}>
         <td class="mono" style="font-size:12.5px; color:var(--ink-soft);">תשלום ${idx+1}</td>
         <td><input type="date" dir="ltr" value="${esc(pay.date||'')}" onchange="updatePaymentLine('${repId}',${idx},'date',this.value)"></td>
         <td>
@@ -2143,6 +2151,9 @@ function viewPayments(){
         <td>
           <label style="display:flex; align-items:center; gap:5px; font-size:12px; white-space:nowrap;">
             <input type="checkbox" ${pay.future?'checked':''} onchange="updatePaymentLine('${repId}',${idx},'future', this.checked)"> תשלום עתידי (שולם, טרם נכנס לבנק)
+          </label>
+          <label style="display:flex; align-items:center; gap:5px; font-size:12px; white-space:nowrap; margin-top:4px; ${pay.unpaid?'color:var(--coral); font-weight:600;':''}">
+            <input type="checkbox" ${pay.unpaid?'checked':''} onchange="updatePaymentLine('${repId}',${idx},'unpaid', this.checked)"> לא שולם
           </label>
           ${pay.future && pay.date && pay.date<=todayStr() ? `<div style="font-size:11px; color:var(--coral); font-weight:600; margin-top:3px;">הגיע מועד הכניסה לבנק — לבטל סימון עתידי?</div>` : ''}
         </td>
@@ -2190,21 +2201,22 @@ function viewPayments(){
       </td>
       <td class="mono">${currencySymbol(p.currency)}${fmtMoney(paid, p.currency)}</td>
       <td>${future>0 ? `<div class="mono">${currencySymbol(p.currency)}${fmtMoney(future, p.currency)}</div>${nextFut ? `<div style="font-size:11px; margin-top:2px; color:${futDue?'var(--coral)':'var(--ink-soft)'}; ${futDue?'font-weight:600;':''}">${futDue?'הגיע המועד: ':'הבא: '}${fmtDateDMY(nextFut)}</div>` : ''}` : `<span style="color:var(--ink-soft)">—</span>`}</td>
+      <td>${balance>0 ? `<div class="mono" style="font-weight:600; color:var(--coral);">${currencySymbol(p.currency)}${fmtMoney(balance, p.currency)}</div>${unpaidAmt>0 ? `<div style="font-size:11px; margin-top:2px; color:var(--coral);">מתוכם סומן כלא שולם: ${currencySymbol(p.currency)}${fmtMoney(unpaidAmt, p.currency)}</div>` : ''}` : `<span style="color:var(--ink-soft)">—</span>`}</td>
       <td>${pill}</td>
       <td><button class="btn ghost small" onclick="ui.openPaymentsCustomerId = ui.openPaymentsCustomerId==='${repId}' ? null : '${repId}'; render();">${open?'סגירה ▲':'פרטי תשלום ▼'}</button></td>
     </tr>
     ${open ? `
     <tr>
-      <td colspan="8" style="background:var(--parchment); padding:14px 16px;">
+      <td colspan="9" style="background:var(--parchment); padding:14px 16px;">
         <table>
-          <thead><tr><th></th><th>תאריך</th><th>סכום ששולם (בכל מטבע)</th><th>אמצעי תשלום</th><th>מס' אסמכתא</th><th>עתידי?</th><th>חשבונית</th><th>קבלה</th><th></th></tr></thead>
+          <thead><tr><th></th><th>תאריך</th><th>סכום ששולם (בכל מטבע)</th><th>אמצעי תשלום</th><th>מס' אסמכתא</th><th>סטטוס תשלום</th><th>חשבונית</th><th>קבלה</th><th></th></tr></thead>
           <tbody>${paymentRows || `<tr><td colspan="9" style="color:var(--ink-soft); font-size:13px;">אין עדיין תשלומים רשומים</td></tr>`}</tbody>
         </table>
         ${p.payments.length < MAX_PAYMENTS ? `<button class="btn gold small" style="margin-top:10px;" onclick="addPaymentLine('${repId}')">+ הוספת תשלום</button>` : `<p style="font-size:12px;color:var(--ink-soft); margin-top:8px;">ניתן לרשום עד ${MAX_PAYMENTS} תשלומים</p>`}
       </td>
     </tr>` : ''}`;
   }).join('');
-  const rowsOut = units.length ? rows : `<tr><td colspan="8"><div class="empty"><div class="stamp">אין לקוחות להצגה</div></div></td></tr>`;
+  const rowsOut = units.length ? rows : `<tr><td colspan="9"><div class="empty"><div class="stamp">אין לקוחות להצגה</div></div></td></tr>`;
   const pctILS = totalReqILS>0 ? Math.min(100, Math.round((totalPaidILS+totalFutILS)/totalReqILS*100)) : 0;
   const pctUSD = totalReqUSD>0 ? Math.min(100, Math.round((totalPaidUSD+totalFutUSD)/totalReqUSD*100)) : 0;
 
@@ -2248,7 +2260,7 @@ function viewPayments(){
       </select>
     </div>
     <table>
-      <thead><tr><th>לקוח</th><th>קבוצה</th><th>סכום נדרש</th><th>מקדמה</th><th>שולם בפועל</th><th>תשלום עתידי</th><th>סטטוס</th><th></th></tr></thead>
+      <thead><tr><th>לקוח</th><th>קבוצה</th><th>סכום נדרש</th><th>מקדמה</th><th>שולם בפועל</th><th>תשלום עתידי</th><th>יתרה לתשלום</th><th>סטטוס</th><th></th></tr></thead>
       <tbody>${rowsOut}</tbody>
     </table>
   </div>`;
@@ -2358,6 +2370,9 @@ async function updatePaymentLine(customerId, idx, field, value){
     pay.amount = convertAmount(pay.enteredAmount, pay.enteredCurrency||p.currency, p.currency, pay.rateOverride);
   } else {
     pay[field] = field==='amount' ? parseAmount(value) : value;
+    // "עתידי" ו"לא שולם" סותרים זה את זה
+    if(field==='future' && value) pay.unpaid = false;
+    if(field==='unpaid' && value) pay.future = false;
   }
   await saveList('payments', state.payments);
   await autoUpdateCustomerStatus(customerId);
@@ -2597,7 +2612,7 @@ function exportToExcel(){
       const pay = p.payments[i];
       row[`תשלום ${i+1} - תאריך`] = pay?fmtDateDMY(pay.date):'';
       row[`תשלום ${i+1} - סכום`] = pay?(Number(pay.amount)||0):'';
-      row[`תשלום ${i+1} - סטטוס`] = pay ? (pay.future ? 'עתידי (שולם, טרם נכנס לבנק)' : 'שולם') : '';
+      row[`תשלום ${i+1} - סטטוס`] = pay ? (pay.unpaid ? 'לא שולם' : (pay.future ? 'עתידי (שולם, טרם נכנס לבנק)' : 'שולם')) : '';
       row[`תשלום ${i+1} - אמצעי`] = pay&&pay.method?(PAYMENT_METHODS[pay.method]||''):'';
       row[`תשלום ${i+1} - אסמכתא`] = pay?(pay.reference||''):'';
       row[`תשלום ${i+1} - חשבונית`] = pay ? (pay.invoiceIssued ? (pay.invoiceDate ? `הוצאה (${fmtDateDMY(pay.invoiceDate)})` : 'הוצאה') : 'לא הוצאה') : '';
@@ -2605,13 +2620,14 @@ function exportToExcel(){
     }
     row['סה״כ שולם'] = paid;
     row['תשלום עתידי'] = futureTotal(p);
+    row['סימון לא שולם'] = unpaidTotal(p);
     row['יתרה'] = netRequired(p)-paid-futureTotal(p);
     return row;
   });
   const paymentColWidths = [];
   for(let i=0;i<MAX_PAYMENTS;i++) paymentColWidths.push({wch:12},{wch:12},{wch:16},{wch:14},{wch:12},{wch:16},{wch:16});
   const paymentsWs = XLSX.utils.json_to_sheet(paymentsSheet.length?paymentsSheet:[{'הערה':'אין נתונים'}]);
-  paymentsWs['!cols'] = [{wch:18},{wch:16},{wch:12},{wch:10},{wch:22},{wch:12},{wch:9}, ...paymentColWidths, {wch:12},{wch:12},{wch:12}];
+  paymentsWs['!cols'] = [{wch:18},{wch:16},{wch:12},{wch:10},{wch:22},{wch:12},{wch:9}, ...paymentColWidths, {wch:12},{wch:12},{wch:12},{wch:12}];
   styleHeaderRow(paymentsWs, 0);
   borderAllCells(paymentsWs);
   XLSX.utils.book_append_sheet(wb, paymentsWs, 'תשלומים');
