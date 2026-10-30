@@ -1006,13 +1006,61 @@ function birthdayEmailLink(c){
   const body = bodyLines.map(line=>RLM+line).join('\n');
   return `mailto:${c.email||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
+// ייצוא ימי ההולדת של כל הלקוחות לקובץ יומן (ICS) לייבוא ל-Google Calendar:
+// אירוע שנתי חוזר לכל לקוח, עם תזכורות יומיים ויום לפני
+function exportBirthdaysICS(){
+  const pad = n=>String(n).padStart(2,'0');
+  const ymd = d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  const icsEscape = t=>String(t||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+  const stamp = new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z');
+  const events = [];
+  state.customers.forEach(c=>{
+    const info = nextBirthdayInfo(c.dob);
+    if(!info) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const start = new Date(today.getTime() + info.daysUntil*24*60*60*1000);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate()+1);
+    const isFeb29 = info.month===1 && info.day===29;
+    const rrule = isFeb29 ? 'FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1' : 'FREQ=YEARLY';
+    const title = `🎂 יום הולדת - ${customerName(c)}`;
+    const alarm = (trigger, text)=>[
+      'BEGIN:VALARM','ACTION:DISPLAY',`DESCRIPTION:${icsEscape(text)}`,`TRIGGER:${trigger}`,'END:VALARM'
+    ];
+    events.push([
+      'BEGIN:VEVENT',
+      `UID:birthday-${c.id}@ginger-customers`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${ymd(start)}`,
+      `DTEND;VALUE=DATE:${ymd(end)}`,
+      `RRULE:${rrule}`,
+      `SUMMARY:${icsEscape(title)}`,
+      `DESCRIPTION:${icsEscape('יום הולדת ללקוח/ה ' + customerName(c) + (c.email?' | '+c.email:'') + (c.phone?' | '+c.phone:''))}`,
+      'TRANSP:TRANSPARENT',
+      ...alarm('-P2D','יום הולדת בעוד יומיים: '+customerName(c)),
+      ...alarm('-P1D','יום הולדת מחר: '+customerName(c)),
+      'END:VEVENT'
+    ].join('\r\n'));
+  });
+  if(!events.length){ alert('אין לקוחות עם תאריך לידה תקין לייצוא.'); return; }
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Ginger Tourism//Customer Birthdays//HE','CALSCALE:GREGORIAN','X-WR-CALNAME:ימי הולדת לקוחות',...events,'END:VCALENDAR'].join('\r\n');
+  const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'customer-birthdays.ics';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+const BIRTHDAY_ICS_BTN = `<button class="btn small ghost" onclick="exportBirthdaysICS()" title="ייצוא כל ימי ההולדת לקובץ יומן (Google Calendar), עם תזכורות יומיים ויום לפני">📅 ייצוא ל-Google Calendar</button>`;
 // כרטיס עם רשימת ימי הולדת ב-30 הימים הקרובים, וכפתור לשליחת ברכה לכל לקוח
 function birthdayBanner(){
   const items = state.customers
     .map(c=>({c, info:nextBirthdayInfo(c.dob)}))
     .filter(x=>x.info && x.info.daysUntil<=30)
     .sort((a,b)=>a.info.daysUntil-b.info.daysUntil);
-  if(!items.length) return '';
+  if(!items.length){
+    const anyDob = state.customers.some(c=>nextBirthdayInfo(c.dob));
+    return anyDob ? `<div class="card" style="border-color:var(--gold); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;"><span>🎂 אין ימי הולדת ב-30 הימים הקרובים</span>${BIRTHDAY_ICS_BTN}</div>` : '';
+  }
   const rows = items.map(({c,info})=>{
     const dd = String(info.day).padStart(2,'0');
     const mm = String(info.month+1).padStart(2,'0');
@@ -1034,7 +1082,7 @@ function birthdayBanner(){
   }).join('');
   return `
     <div class="card" style="border-color:var(--gold);">
-      <h2 style="color:var(--gold-deep);">🎂 ימי הולדת קרובים (30 הימים הקרובים)</h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;"><h2 style="color:var(--gold-deep); margin:0;">🎂 ימי הולדת קרובים (30 הימים הקרובים)</h2>${BIRTHDAY_ICS_BTN}</div>
       <table>
         <thead><tr><th>שם</th><th>תאריך</th><th>גיל שיחגגו</th><th>מתי</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
@@ -2087,6 +2135,7 @@ function viewPayments(){
   }
   const units = billingUnits(customers);
   let totalReqILS=0, totalPaidILS=0, totalReqUSD=0, totalPaidUSD=0, totalFutILS=0, totalFutUSD=0;
+  let debtILS=0, debtUSD=0, surplusILS=0, surplusUSD=0; // חובות בלבד / עודפים בלבד (עודף של לקוח לא מקזז חוב של אחר)
   const rows = units.map(u=>{
     const repId = u.repId;
     const p = getPayment(repId);
@@ -2100,6 +2149,8 @@ function viewPayments(){
     else { totalReqILS += netReq; totalPaidILS += paid; totalFutILS += future; }
     // יתרה לתשלום: רק מה שעדיין לא שולם בשום צורה (לא בפועל ולא כתשלום עתידי)
     const balance = netReq - paid - future;
+    if(p.currency==='USD'){ if(balance>0) debtUSD += balance; else surplusUSD += -balance; }
+    else { if(balance>0) debtILS += balance; else surplusILS += -balance; }
     const g = findGroupOf(repId);
     const unitLabel = u.type==='household'
       ? `${u.members.map(m=>customerName(m)).join(' + ')} <span class="pill neutral" title="תא משפחתי - תשלום משותף" style="margin-inline-start:4px;">👪 זוג</span> <button class="icon-btn" style="font-size:11px;" onclick="unlinkHousehold('${repId}')" title="ניתוק התא המשפחתי">🔓</button>`
@@ -2201,7 +2252,7 @@ function viewPayments(){
       </td>
       <td class="mono">${currencySymbol(p.currency)}${fmtMoney(paid, p.currency)}</td>
       <td>${future>0 ? `<div class="mono">${currencySymbol(p.currency)}${fmtMoney(future, p.currency)}</div>${nextFut ? `<div style="font-size:11px; margin-top:2px; color:${futDue?'var(--coral)':'var(--ink-soft)'}; ${futDue?'font-weight:600;':''}">${futDue?'הגיע המועד: ':'הבא: '}${fmtDateDMY(nextFut)}</div>` : ''}` : `<span style="color:var(--ink-soft)">—</span>`}</td>
-      <td>${balance>0 ? `<div class="mono" style="font-weight:600; color:var(--coral);">${currencySymbol(p.currency)}${fmtMoney(balance, p.currency)}</div>${unpaidAmt>0 ? `<div style="font-size:11px; margin-top:2px; color:var(--coral);">מתוכם סומן כלא שולם: ${currencySymbol(p.currency)}${fmtMoney(unpaidAmt, p.currency)}</div>` : ''}` : `<span style="color:var(--ink-soft)">—</span>`}</td>
+      <td>${balance>0 ? `<div class="mono" style="font-weight:600; color:var(--coral);">${currencySymbol(p.currency)}${fmtMoney(balance, p.currency)}</div>${unpaidAmt>0 ? `<div style="font-size:11px; margin-top:2px; color:var(--coral);">מתוכם סומן כלא שולם: ${currencySymbol(p.currency)}${fmtMoney(unpaidAmt, p.currency)}</div>` : ''}` : (balance<0 ? `<div class="mono" style="font-weight:600; color:var(--gold-deep);" title="שולם יותר מהסכום הנדרש">עודף ${currencySymbol(p.currency)}${fmtMoney(-balance, p.currency)}</div>` : `<span style="color:var(--ink-soft)">—</span>`)}</td>
       <td>${pill}</td>
       <td><button class="btn ghost small" onclick="ui.openPaymentsCustomerId = ui.openPaymentsCustomerId==='${repId}' ? null : '${repId}'; render();">${open?'סגירה ▲':'פרטי תשלום ▼'}</button></td>
     </tr>
@@ -2234,7 +2285,8 @@ function viewPayments(){
         <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">₪${fmtMoney(totalReqILS, 'ILS')}</div></div>
         <div class="stat"><div class="label">שולם בפועל</div><div class="value">₪${fmtMoney(totalPaidILS, 'ILS')}</div></div>
         <div class="stat"><div class="label">תשלום עתידי</div><div class="value">₪${fmtMoney(totalFutILS, 'ILS')}</div></div>
-        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">₪${fmtMoney(totalReqILS-totalPaidILS-totalFutILS, 'ILS')}</div></div>
+        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">₪${fmtMoney(debtILS, 'ILS')}</div></div>
+        ${surplusILS>0.005 ? `<div class="stat"><div class="label">עודף ששולם</div><div class="value" style="color:var(--gold-deep);">₪${fmtMoney(surplusILS, 'ILS')}</div></div>` : ''}
       </div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${pctILS}%"></div></div>
       <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctILS}% מהסכום הנדרש בשקלים שולם (כולל תשלומים עתידיים)</div>
@@ -2245,7 +2297,8 @@ function viewPayments(){
         <div class="stat"><div class="label">נדרש לתשלום</div><div class="value">$${fmtMoney(totalReqUSD, 'USD')}</div></div>
         <div class="stat"><div class="label">שולם בפועל</div><div class="value">$${fmtMoney(totalPaidUSD, 'USD')}</div></div>
         <div class="stat"><div class="label">תשלום עתידי</div><div class="value">$${fmtMoney(totalFutUSD, 'USD')}</div></div>
-        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">$${fmtMoney(totalReqUSD-totalPaidUSD-totalFutUSD, 'USD')}</div></div>
+        <div class="stat gold"><div class="label">יתרה לתשלום</div><div class="value">$${fmtMoney(debtUSD, 'USD')}</div></div>
+        ${surplusUSD>0.5 ? `<div class="stat"><div class="label">עודף ששולם</div><div class="value" style="color:var(--gold-deep);">$${fmtMoney(surplusUSD, 'USD')}</div></div>` : ''}
       </div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${pctUSD}%"></div></div>
       <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">${pctUSD}% מהסכום הנדרש בדולרים שולם (כולל תשלומים עתידיים)</div>
